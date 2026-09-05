@@ -1,5 +1,5 @@
 // © 2026 aiaiaiai · aiaiaiai.org
-// Repository license is not selected yet; no SPDX identifier is asserted here.
+// SPDX-License-Identifier: Apache-2.0
 
 const BROWSER_INGEST_PATH = '/v1/browser/events';
 
