@@ -15,10 +15,7 @@ module Aiaiaiai
         apply_browser_cors(origin)
         payload = parse_json(request, read_event_body(request))
         events = normalize_browser_events(request, payload)
-        events.each do |event|
-          validate_event(request, event)
-          authorize_browser_project(request, event, origin)
-        end
+        validate_and_authorize_browser_events(request, events, origin)
         rate_limit_browser_events!(request, events, origin)
         persist_browser_events(events, batch: payload.is_a?(Array))
       end
@@ -42,6 +39,13 @@ module Aiaiaiai
         payload
       end
 
+      def validate_and_authorize_browser_events(request, events, origin)
+        events.each do |event|
+          validate_event(request, event)
+          authorize_browser_project(request, event, origin)
+        end
+      end
+
       def persist_browser_events(events, batch:)
         return persist_event(events.fetch(0)) unless batch
 
@@ -57,14 +61,25 @@ module Aiaiaiai
       end
 
       def rate_limit_browser_events!(request, events, origin)
-        events.group_by { |event| event.fetch('project') }.each do |project, project_events|
-          key = [project, origin, browser_remote_address(request)].join('|')
-          result = self.class.browser_rate_limiter.consume(key, cost: project_events.length)
-          next if result.allowed
-
-          response['Retry-After'] = result.retry_after.to_s
-          request.halt json_error(429, 'rate_limited')
+        grouped_browser_events(events).each do |project, count|
+          result = consume_browser_budget(request, project, origin, count)
+          reject_rate_limited!(request, result) unless result.allowed
         end
+      end
+
+      def grouped_browser_events(events)
+        events.tally { |event| event.fetch('project') }
+      end
+
+      def consume_browser_budget(request, project, origin, count)
+        address = browser_remote_address(request)
+        key = [project, origin, address].join('|')
+        self.class.browser_rate_limiter.consume(key, cost: count)
+      end
+
+      def reject_rate_limited!(request, result)
+        response['Retry-After'] = result.retry_after.to_s
+        request.halt json_error(429, 'rate_limited')
       end
 
       def browser_remote_address(request)
@@ -73,7 +88,9 @@ module Aiaiaiai
       end
 
       def browser_collector_configured?
-        self.class.event_store && self.class.browser_policy&.configured? && self.class.browser_rate_limiter
+        self.class.event_store &&
+          self.class.browser_policy&.configured? &&
+          self.class.browser_rate_limiter
       end
 
       def ensure_browser_configured!(request)
