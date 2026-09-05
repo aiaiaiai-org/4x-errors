@@ -7,6 +7,7 @@ require 'json'
 require 'roda'
 require_relative 'lib/aiaiaiai/errors/event_store'
 require_relative 'lib/aiaiaiai/errors/event_validator'
+require_relative 'lib/aiaiaiai/errors/ingest_authenticator'
 
 module Aiaiaiai
   # Shared 4x-errors collector and reporting components.
@@ -16,7 +17,7 @@ module Aiaiaiai
       MAX_REQUEST_BYTES = 524_288
 
       class << self
-        attr_accessor :event_store
+        attr_accessor :event_store, :authenticator
       end
 
       plugin :json
@@ -38,11 +39,15 @@ module Aiaiaiai
         r.post 'v1', 'events' do
           body = r.body.read(MAX_REQUEST_BYTES + 1)
           r.halt json_error(413, 'request_too_large') if body.bytesize > MAX_REQUEST_BYTES
+          r.halt json_error(503, 'collector_unconfigured') unless collector_configured?
 
           event = parse_json(r, body)
+          authorization = r.env['HTTP_AUTHORIZATION']
+          project = event.is_a?(Hash) ? event['project'] : nil
+          r.halt json_error(401, 'unauthorized') unless self.class.authenticator.authenticated?(authorization, project)
+
           errors = EventValidator.new.validate(event)
           r.halt json_error(422, 'invalid_event', errors) unless errors.empty?
-          r.halt json_error(503, 'collector_unconfigured') unless self.class.event_store
 
           event_id = self.class.event_store.insert(event)
           response.status = 201
@@ -56,6 +61,10 @@ module Aiaiaiai
         request.halt json_error(400, 'invalid_json')
       end
 
+      def collector_configured?
+        self.class.event_store && self.class.authenticator
+      end
+
       def json_error(status, code, details = nil)
         payload = { error: code }
         payload[:details] = details if details
@@ -64,5 +73,8 @@ module Aiaiaiai
     end
 
     App.event_store = EventStore.connect(ENV.fetch('DATABASE_URL')) if ENV.key?('DATABASE_URL')
+    if ENV.key?('INGEST_TOKEN_DIGESTS')
+      App.authenticator = IngestAuthenticator.from_json(ENV.fetch('INGEST_TOKEN_DIGESTS'))
+    end
   end
 end
