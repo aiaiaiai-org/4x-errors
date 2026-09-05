@@ -24,6 +24,18 @@ RSpec.describe Aiaiaiai::Errors::App do
     JSON.parse(last_response.body)
   end
 
+  def second_event
+    event.merge('event_id' => '22222222-2222-4222-8222-222222222222')
+  end
+
+  def invalid_event
+    second_event.merge('error_id' => 'invalid id')
+  end
+
+  def other_project_event
+    second_event.merge('project' => 'other/project')
+  end
+
   let(:recorded_events) { [] }
   let(:store) { instance_double(Aiaiaiai::Errors::EventStore) }
   let(:policy) do
@@ -35,9 +47,6 @@ RSpec.describe Aiaiaiai::Errors::App do
     path = File.expand_path('../../../protocol/errors.v1/fixtures/error-event.valid.json', __dir__)
     JSON.parse(File.read(path)).merge('project' => 'nilx-one/web')
   end
-  let(:second_event) { event.merge('event_id' => '22222222-2222-4222-8222-222222222222') }
-  let(:invalid_event) { second_event.merge('error_id' => 'invalid id') }
-  let(:other_project_event) { second_event.merge('project' => 'other/project') }
 
   before do
     allow(store).to receive(:insert) do |payload|
@@ -67,9 +76,10 @@ RSpec.describe Aiaiaiai::Errors::App do
 
   it 'accepts a bounded browser event batch' do
     post_browser_event([event, second_event])
+    expected_ids = [event.fetch('event_id'), second_event.fetch('event_id')]
 
     expect(last_response.status).to eq(201)
-    expect(response_body.fetch('event_ids')).to eq([event.fetch('event_id'), second_event.fetch('event_id')])
+    expect(response_body.fetch('event_ids')).to eq(expected_ids)
     expect(recorded_events).to eq([event, second_event])
   end
 
