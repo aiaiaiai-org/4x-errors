@@ -3,6 +3,7 @@
   "version": "0.0.0-development",
   "description": "Fail-safe browser reporter for the 4x-errors protocol.",
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
