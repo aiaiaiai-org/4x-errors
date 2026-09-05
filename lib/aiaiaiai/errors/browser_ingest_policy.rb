@@ -15,16 +15,18 @@ module Aiaiaiai
         raise ArgumentError, 'browser ingest origins must be an object' unless mapping.is_a?(Hash)
 
         new(mapping)
-      rescue JSON::ParserError => error
-        raise ArgumentError, 'browser ingest origins must be valid JSON', cause: error
+      rescue JSON::ParserError => e
+        raise ArgumentError, 'browser ingest origins must be valid JSON', cause: e
       end
 
       def initialize(mapping)
         @origins = mapping.to_h do |project, origins|
-          values = Array(origins).map { |origin| normalize_origin(origin) }.uniq.freeze
-          raise ArgumentError, 'browser ingest project must have at least one origin' if values.empty?
+          values = normalize_origins(origins)
+          if values.empty?
+            raise ArgumentError, 'browser ingest project must have at least one origin'
+          end
 
-          [String(project), values]
+          [String(project), values.freeze]
         end.freeze
       end
 
@@ -50,17 +52,44 @@ module Aiaiaiai
 
       private
 
-      def normalize_origin(origin)
-        uri = URI.parse(String(origin))
-        valid = %w[http https].include?(uri.scheme) && uri.host && uri.path.to_s.empty? && !uri.query
-        raise ArgumentError, 'browser ingest origin must be an HTTP(S) origin' unless valid
+      def normalize_origins(origins)
+        Array(origins).map { |origin| normalize_origin(origin) }.uniq
+      end
 
-        port = uri.port
-        default_port = (uri.scheme == 'https' && port == 443) || (uri.scheme == 'http' && port == 80)
-        authority = default_port ? uri.host : "#{uri.host}:#{port}"
-        "#{uri.scheme}://#{authority}"
-      rescue URI::InvalidURIError => error
-        raise ArgumentError, 'browser ingest origin must be valid', cause: error
+      def normalize_origin(origin)
+        uri = parse_origin(origin)
+        raise ArgumentError, 'browser ingest origin must be an HTTP(S) origin' unless valid_origin?(uri)
+
+        "#{uri.scheme}://#{origin_authority(uri)}"
+      end
+
+      def parse_origin(origin)
+        URI.parse(String(origin))
+      rescue URI::InvalidURIError => e
+        raise ArgumentError, 'browser ingest origin must be valid', cause: e
+      end
+
+      def valid_origin?(uri)
+        valid_scheme?(uri) && uri.host && origin_only?(uri)
+      end
+
+      def valid_scheme?(uri)
+        %w[http https].include?(uri.scheme)
+      end
+
+      def origin_only?(uri)
+        uri.path.to_s.empty? && !uri.query && !uri.fragment && !uri.userinfo
+      end
+
+      def origin_authority(uri)
+        return uri.host if default_port?(uri)
+
+        "#{uri.host}:#{uri.port}"
+      end
+
+      def default_port?(uri)
+        (uri.scheme == 'https' && uri.port == 443) ||
+          (uri.scheme == 'http' && uri.port == 80)
       end
     end
   end
