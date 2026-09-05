@@ -1,0 +1,18 @@
+# frozen_string_literal: true
+
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+require 'sequel'
+require 'sequel/extensions/migration'
+
+DATABASE_URL = ENV.fetch('DATABASE_URL')
+MIGRATIONS_PATH = File.expand_path('../db/migrations', __dir__)
+
+database = nil
+begin
+  database = Sequel.connect(DATABASE_URL)
+  Sequel::Migrator.run(database, MIGRATIONS_PATH)
+ensure
+  database&.disconnect
+end

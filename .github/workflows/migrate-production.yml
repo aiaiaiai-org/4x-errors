@@ -1,0 +1,34 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+name: Migrate production database
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    environment: Production
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+
+      - name: Verify production database configuration
+        shell: bash
+        run: test -n "$DATABASE_URL"
+
+      - name: Apply database migrations
+        run: bundle exec ruby bin/migrate
