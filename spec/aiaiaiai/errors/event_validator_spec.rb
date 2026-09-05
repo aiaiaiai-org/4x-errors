@@ -10,9 +10,10 @@ require_relative '../../../lib/aiaiaiai/errors/event_validator'
 RSpec.describe Aiaiaiai::Errors::EventValidator do
   subject(:validator) { described_class.new }
 
-  let(:event) do
-    JSON.parse(File.read(File.expand_path('../../../protocol/errors.v1/fixtures/error-event.valid.json', __dir__)))
+  let(:fixture_path) do
+    File.expand_path('../../../protocol/errors.v1/fixtures/error-event.valid.json', __dir__)
   end
+  let(:event) { JSON.parse(File.read(fixture_path)) }
 
   it 'accepts the canonical valid fixture' do
     expect(validator.validate(event)).to be_empty
