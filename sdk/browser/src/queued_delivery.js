@@ -41,6 +41,12 @@ export function createQueuedDelivery({
         .then(() => drainBacklog(queue, send, limit, byteLimit, retry, circuit))
         .catch(() => undefined);
       return pipeline;
+    },
+    lifecycleFlush(sendLifecycle) {
+      pipeline = pipeline
+        .then(() => sendLifecycleSnapshot(queue, sendLifecycle, limit, byteLimit))
+        .catch(() => undefined);
+      return pipeline;
     }
   };
 }
@@ -64,10 +70,7 @@ async function drainBacklog(queue, send, batchSize, maxRequestBytes, retry, circ
 async function drainOnce(queue, send, batchSize, maxRequestBytes, retry, circuit) {
   if (!queue?.available || circuit.isOpen()) return false;
 
-  const queued = await queue.peek(batchSize);
-  if (queued.length === 0) return false;
-
-  const batch = selectRequestBatch(queued, maxRequestBytes);
+  const batch = await queuedBatch(queue, batchSize, maxRequestBytes);
   if (batch.length === 0) return false;
 
   const delivered = await sendWithRetry(send, batch, retry);
@@ -76,6 +79,20 @@ async function drainOnce(queue, send, batchSize, maxRequestBytes, retry, circuit
 
   await queue.remove(batch.map((event) => event.event_id));
   return true;
+}
+
+async function sendLifecycleSnapshot(queue, sendLifecycle, batchSize, maxRequestBytes) {
+  if (!queue?.available || typeof sendLifecycle !== 'function') return;
+  const batch = await queuedBatch(queue, batchSize, maxRequestBytes);
+  if (batch.length === 0) return;
+  await safeSend(sendLifecycle, batch);
+  // Lifecycle delivery is best-effort; normal confirmed delivery owns acknowledgement.
+}
+
+async function queuedBatch(queue, batchSize, maxRequestBytes) {
+  const queued = await queue.peek(batchSize);
+  if (queued.length === 0) return [];
+  return selectRequestBatch(queued, maxRequestBytes);
 }
 
 function selectRequestBatch(events, maxRequestBytes) {
