@@ -1,0 +1,32 @@
+{
+  "description": "context nesting is bounded.",
+  "valid": false,
+  "violations": [
+    "/events/0/context/l1/l2/l3/l4/l5/l6"
+  ],
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "ai.model.load.failed",
+        "environment": "production",
+        "context": {
+          "l1": {
+            "l2": {
+              "l3": {
+                "l4": {
+                  "l5": {
+                    "l6": {
+                      "l7": "too deep"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

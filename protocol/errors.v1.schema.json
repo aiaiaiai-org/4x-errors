@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiaiaiai.org/schemas/errors.v1.schema.json",
+  "title": "errors.v1",
+  "description": "Canonical, language-agnostic error reporting contract. One request carries observed occurrences and, optionally, explicit relations between failures.",
+  "type": "object",
+  "required": ["protocol_version", "project", "events"],
+  "additionalProperties": false,
+  "properties": {
+    "protocol_version": {"const": "errors.v1"},
+    "project": {"$ref": "#/$defs/project"},
+    "events": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 100,
+      "items": {"$ref": "#/$defs/event"}
+    },
+    "relations": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {"$ref": "#/$defs/relation"}
+    }
+  },
+  "$defs": {
+    "project": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)*$"
+    },
+    "semantic_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*$"
+    },
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "local_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["debug", "info", "warning", "error", "critical"]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "maxLength": 64
+    },
+    "event": {
+      "type": "object",
+      "required": ["error_id", "environment"],
+      "additionalProperties": false,
+      "properties": {
+        "error_id": {
+          "$ref": "#/$defs/semantic_id",
+          "description": "Stable semantic identity of a failure kind. Never derived from a free-form message."
+        },
+        "family_id": {
+          "oneOf": [{"$ref": "#/$defs/semantic_id"}, {"type": "null"}],
+          "description": "Family membership as reported by the reporter. A hint, not an assertion of causality."
+        },
+        "local_ref": {
+          "$ref": "#/$defs/local_ref",
+          "description": "Batch-scoped alias so relations in the same request can reference this event. Not persisted."
+        },
+        "component": {"type": "string", "minLength": 1, "maxLength": 100},
+        "environment": {"type": "string", "minLength": 1, "maxLength": 50, "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "severity": {"$ref": "#/$defs/severity"},
+        "message": {"type": "string", "maxLength": 4096},
+        "exception": {"$ref": "#/$defs/exception"},
+        "fingerprint": {"type": "string", "minLength": 1, "maxLength": 128},
+        "context": {"type": "object"},
+        "tags": {
+          "type": "object",
+          "maxProperties": 32,
+          "propertyNames": {"maxLength": 64},
+          "additionalProperties": {"type": "string", "maxLength": 256}
+        },
+        "observed_at": {"$ref": "#/$defs/timestamp"},
+        "occurrence_key": {"type": "string", "minLength": 1, "maxLength": 200},
+        "sdk": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {"type": "string", "maxLength": 100},
+            "version": {"type": "string", "maxLength": 50}
+          }
+        }
+      }
+    },
+    "exception": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {"type": "string", "minLength": 1, "maxLength": 200},
+        "message": {"type": "string", "maxLength": 4096},
+        "backtrace": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {"type": "string", "maxLength": 512}
+        },
+        "cause": {"$ref": "#/$defs/exception"}
+      }
+    },
+    "relation_endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "error_id": {"$ref": "#/$defs/semantic_id"},
+        "event_id": {"$ref": "#/$defs/uuid"},
+        "local_ref": {"$ref": "#/$defs/local_ref"}
+      }
+    },
+    "relation": {
+      "type": "object",
+      "required": ["source", "type", "target", "confidence", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "source": {"$ref": "#/$defs/relation_endpoint"},
+        "target": {"$ref": "#/$defs/relation_endpoint"},
+        "type": {
+          "type": "string",
+          "enum": [
+            "root_cause_of",
+            "derivative_of",
+            "contributes_to",
+            "triggered_by",
+            "correlated_with",
+            "duplicate_of"
+          ]
+        },
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "explicit_reporter_relation",
+              "deterministic_rule",
+              "shared_trace_id",
+              "shared_operation_id",
+              "dependency_failure",
+              "temporal_sequence",
+              "human_review",
+              "heuristic_similarity"
+            ]
+          }
+        },
+        "note": {"type": "string", "maxLength": 1000}
+      }
+    }
+  }
+}

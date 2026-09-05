@@ -1,0 +1,114 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Formatting and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ruby_version
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version-file: .ruby-version
+          bundler-cache: true
+
+      - name: bundle_install
+        run: bundle check
+
+      - name: formatting
+        run: bundle exec rake format:check
+
+      - name: lint
+        run: bundle exec rake lint
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    # An ephemeral database, matching the PostgreSQL major version Supabase
+    # runs. The production DATABASE_URL is not available to this job and must
+    # never be: it belongs to the production environment only.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: 4x_errors_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/4x_errors_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ruby_version
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version-file: .ruby-version
+          bundler-cache: true
+
+      - name: no_production_credentials_in_regular_ci
+        run: |
+          if [ -n "${DATABASE_URL:-}" ]; then
+            echo "DATABASE_URL is set in a job that must only use the ephemeral database" >&2
+            exit 1
+          fi
+
+      - name: protocol_contract_tests
+        run: bundle exec rspec spec/protocol
+
+      - name: unit_tests
+        run: bundle exec rspec --tag '~database'
+
+      - name: postgresql_integration_tests
+        run: bundle exec rspec --tag database
+
+  audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ruby_version
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version-file: .ruby-version
+          bundler-cache: true
+
+      - name: security_audit
+        run: |
+          bundle exec bundle-audit update
+          bundle exec bundle-audit check
+
+  image:
+    name: Container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: docker_build
+        run: docker build --build-arg RUBY_VERSION="$(cat .ruby-version)" -t 4x-errors:ci .
+
+      # The image must start and answer without any database configured.
+      - name: image_starts
+        run: docker run --rm 4x-errors:ci ruby -e 'require "./lib/aiaiaiai/errors/collector"; puts "collector loaded"'

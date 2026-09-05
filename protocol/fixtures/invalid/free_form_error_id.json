@@ -1,0 +1,17 @@
+{
+  "description": "error_id is a stable semantic identifier, never a free-form message.",
+  "valid": false,
+  "violations": [
+    "/events/0/error_id"
+  ],
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "Model failed to load!",
+        "environment": "production"
+      }
+    ]
+  }
+}

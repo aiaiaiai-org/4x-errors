@@ -1,0 +1,18 @@
+{
+  "description": "Timestamps are RFC 3339.",
+  "valid": false,
+  "violations": [
+    "/events/0/observed_at"
+  ],
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "ai.model.load.failed",
+        "environment": "production",
+        "observed_at": "05.09.2026 04:12"
+      }
+    ]
+  }
+}

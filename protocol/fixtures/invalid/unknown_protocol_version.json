@@ -1,0 +1,17 @@
+{
+  "description": "Only errors.v1 is accepted by this endpoint.",
+  "valid": false,
+  "violations": [
+    "/protocol_version"
+  ],
+  "payload": {
+    "protocol_version": "errors.v2",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "ai.model.load.failed",
+        "environment": "production"
+      }
+    ]
+  }
+}

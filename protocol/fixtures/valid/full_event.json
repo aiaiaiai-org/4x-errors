@@ -1,0 +1,46 @@
+{
+  "description": "Every optional field of a single event, populated.",
+  "valid": true,
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "ai.inference.backend.unavailable",
+        "environment": "production",
+        "family_id": "ai.inference.runtime",
+        "component": "inference-gateway",
+        "severity": "critical",
+        "message": "inference backend did not answer",
+        "exception": {
+          "type": "Net::ReadTimeout",
+          "message": "execution expired",
+          "backtrace": [
+            "app/gateway.rb:88:in `call'",
+            "app/gateway.rb:41:in `dispatch'"
+          ],
+          "cause": {
+            "type": "Errno::ETIMEDOUT",
+            "message": "Connection timed out"
+          }
+        },
+        "fingerprint": "sha256:0f2c1c2b5b3f4a5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5",
+        "context": {
+          "model": "avatar-v3",
+          "attempt": 3,
+          "region": "eu-central-1"
+        },
+        "tags": {
+          "tier": "interactive",
+          "release": "2026.09.1"
+        },
+        "observed_at": "2026-09-05T04:12:31.482Z",
+        "occurrence_key": "inference-gateway:2026-09-05T04:12:31Z:avatar-v3",
+        "sdk": {
+          "name": "aiaiaiai-errors-ruby",
+          "version": "0.1.0"
+        }
+      }
+    ]
+  }
+}

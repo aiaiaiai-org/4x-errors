@@ -1,0 +1,12 @@
+{
+  "description": "A request must carry at least one event or one relation.",
+  "valid": false,
+  "violations": [
+    ""
+  ],
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": []
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "description": "Relation types are a closed vocabulary.",
+  "valid": false,
+  "violations": [
+    "/relations/0/type"
+  ],
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "ai.model.load.failed",
+        "environment": "production"
+      }
+    ],
+    "relations": [
+      {
+        "source": {
+          "error_id": "a.b"
+        },
+        "type": "caused_by",
+        "target": {
+          "error_id": "c.d"
+        },
+        "confidence": 1.0,
+        "evidence": [
+          "human_review"
+        ]
+      }
+    ]
+  }
+}

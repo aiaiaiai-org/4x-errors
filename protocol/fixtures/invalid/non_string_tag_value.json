@@ -1,0 +1,20 @@
+{
+  "description": "Tag values are strings.",
+  "valid": false,
+  "violations": [
+    "/events/0/tags/attempt"
+  ],
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "ai.model.load.failed",
+        "environment": "production",
+        "tags": {
+          "attempt": 3
+        }
+      }
+    ]
+  }
+}

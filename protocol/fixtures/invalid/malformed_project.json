@@ -1,0 +1,17 @@
+{
+  "description": "project identifiers are lower case and slash separated.",
+  "valid": false,
+  "violations": [
+    "/project"
+  ],
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "Nilx-One/Web",
+    "events": [
+      {
+        "error_id": "ai.model.load.failed",
+        "environment": "production"
+      }
+    ]
+  }
+}

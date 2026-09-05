@@ -1,0 +1,32 @@
+{
+  "description": "Confidence is a probability.",
+  "valid": false,
+  "violations": [
+    "/relations/0/confidence"
+  ],
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "ai.model.load.failed",
+        "environment": "production"
+      }
+    ],
+    "relations": [
+      {
+        "source": {
+          "error_id": "a.b"
+        },
+        "type": "correlated_with",
+        "target": {
+          "error_id": "c.d"
+        },
+        "confidence": 2,
+        "evidence": [
+          "human_review"
+        ]
+      }
+    ]
+  }
+}

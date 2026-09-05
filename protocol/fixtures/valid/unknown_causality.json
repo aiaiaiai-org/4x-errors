@@ -1,0 +1,16 @@
+{
+  "description": "A failure whose cause is not known. Absence of a relation is a valid state.",
+  "valid": true,
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "ai.inference.runtime.unknown",
+        "environment": "production",
+        "message": "inference stopped without a diagnosable cause",
+        "severity": "warning"
+      }
+    ]
+  }
+}

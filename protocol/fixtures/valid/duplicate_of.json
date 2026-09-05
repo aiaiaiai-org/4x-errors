@@ -1,0 +1,29 @@
+{
+  "description": "An alias from a superseded error id to its canonical one. Not a causal claim.",
+  "valid": true,
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "ai.model.loading.failed",
+        "environment": "production"
+      }
+    ],
+    "relations": [
+      {
+        "source": {
+          "error_id": "ai.model.loading.failed"
+        },
+        "type": "duplicate_of",
+        "target": {
+          "error_id": "ai.model.load.failed"
+        },
+        "confidence": 1.0,
+        "evidence": [
+          "human_review"
+        ]
+      }
+    ]
+  }
+}

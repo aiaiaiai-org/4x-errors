@@ -1,0 +1,20 @@
+{
+  "description": "Different error ids reported by one project as members of one shared family. Family membership asserts kinship, not causality.",
+  "valid": true,
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "ai.model.load.failed",
+        "environment": "production",
+        "family_id": "ai.model.availability"
+      },
+      {
+        "error_id": "ai.inference.backend.unavailable",
+        "environment": "production",
+        "family_id": "ai.model.availability"
+      }
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+/.bundle/
+/vendor/bundle/
+/tmp/
+/log/
+/coverage/
+*.gem
+.env
+.env.*
+!.env.example

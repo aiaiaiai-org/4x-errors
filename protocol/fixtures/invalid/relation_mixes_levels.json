@@ -1,0 +1,33 @@
+{
+  "description": "A relation connects two error ids or two concrete events, never one of each.",
+  "valid": false,
+  "violations": [
+    "/relations/0"
+  ],
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "ai.model.load.failed",
+        "environment": "production",
+        "local_ref": "effect"
+      }
+    ],
+    "relations": [
+      {
+        "source": {
+          "error_id": "a.b"
+        },
+        "type": "root_cause_of",
+        "target": {
+          "local_ref": "effect"
+        },
+        "confidence": 0.9,
+        "evidence": [
+          "deterministic_rule"
+        ]
+      }
+    ]
+  }
+}

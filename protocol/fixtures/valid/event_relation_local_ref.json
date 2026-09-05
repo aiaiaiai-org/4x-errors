@@ -1,0 +1,36 @@
+{
+  "description": "Two concrete occurrences related in one request. local_ref is batch scoped and is not persisted.",
+  "valid": true,
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "identity.provider.unreachable",
+        "environment": "production",
+        "local_ref": "cause"
+      },
+      {
+        "error_id": "session.refresh.failed",
+        "environment": "production",
+        "local_ref": "effect"
+      }
+    ],
+    "relations": [
+      {
+        "source": {
+          "local_ref": "cause"
+        },
+        "type": "root_cause_of",
+        "target": {
+          "local_ref": "effect"
+        },
+        "confidence": 0.8,
+        "evidence": [
+          "shared_trace_id",
+          "temporal_sequence"
+        ]
+      }
+    ]
+  }
+}

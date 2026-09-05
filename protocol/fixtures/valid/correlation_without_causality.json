@@ -1,0 +1,34 @@
+{
+  "description": "Similarity is admissible evidence for a non-causal relation.",
+  "valid": true,
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "map.renderer.initialization.failed",
+        "environment": "production"
+      },
+      {
+        "error_id": "map.tiles.fetch.failed",
+        "environment": "production"
+      }
+    ],
+    "relations": [
+      {
+        "source": {
+          "error_id": "map.renderer.initialization.failed"
+        },
+        "type": "correlated_with",
+        "target": {
+          "error_id": "map.tiles.fetch.failed"
+        },
+        "confidence": 0.4,
+        "evidence": [
+          "heuristic_similarity",
+          "temporal_sequence"
+        ]
+      }
+    ]
+  }
+}

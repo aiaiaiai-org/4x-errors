@@ -1,0 +1,35 @@
+{
+  "description": "An explicit causal relation between two error ids, with evidence and confidence.",
+  "valid": true,
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "ai.model.load.failed",
+        "environment": "production"
+      },
+      {
+        "error_id": "ai.avatar.response.unavailable",
+        "environment": "production"
+      }
+    ],
+    "relations": [
+      {
+        "source": {
+          "error_id": "ai.model.load.failed"
+        },
+        "type": "root_cause_of",
+        "target": {
+          "error_id": "ai.avatar.response.unavailable"
+        },
+        "confidence": 0.95,
+        "evidence": [
+          "explicit_reporter_relation",
+          "dependency_failure"
+        ],
+        "note": "the avatar pipeline has no fallback model"
+      }
+    ]
+  }
+}

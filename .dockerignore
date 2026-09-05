@@ -1,0 +1,13 @@
+.git
+.github
+.bundle
+vendor
+spec
+tmp
+log
+coverage
+docs
+*.md
+!README.md
+.env
+.env.*

@@ -1,0 +1,23 @@
+{
+  "description": "local_ref is unique within a request.",
+  "valid": false,
+  "violations": [
+    "/events/1/local_ref"
+  ],
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "ai.model.load.failed",
+        "environment": "production",
+        "local_ref": "same"
+      },
+      {
+        "error_id": "c.d",
+        "environment": "production",
+        "local_ref": "same"
+      }
+    ]
+  }
+}

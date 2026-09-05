@@ -1,0 +1,33 @@
+{
+  "description": "A local_ref must name an event in the same request.",
+  "valid": false,
+  "violations": [
+    "/relations/0/source"
+  ],
+  "payload": {
+    "protocol_version": "errors.v1",
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "ai.model.load.failed",
+        "environment": "production",
+        "local_ref": "effect"
+      }
+    ],
+    "relations": [
+      {
+        "source": {
+          "local_ref": "cause"
+        },
+        "type": "root_cause_of",
+        "target": {
+          "local_ref": "effect"
+        },
+        "confidence": 0.9,
+        "evidence": [
+          "shared_trace_id"
+        ]
+      }
+    ]
+  }
+}

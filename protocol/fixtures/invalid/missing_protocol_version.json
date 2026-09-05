@@ -1,0 +1,16 @@
+{
+  "description": "protocol_version is mandatory.",
+  "valid": false,
+  "violations": [
+    ""
+  ],
+  "payload": {
+    "project": "nilx-one/web",
+    "events": [
+      {
+        "error_id": "ai.model.load.failed",
+        "environment": "production"
+      }
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+ruby_version: 4.0
+format: progress
+ignore:
+  - "vendor/**/*"

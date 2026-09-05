@@ -1,0 +1,53 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+name: Production database validation
+
+# Reads the production DATABASE_URL and writes one identifiable smoke record
+# to the live database, then removes it. It never deploys anything.
+#
+# The secret lives in the `production` GitHub environment and is therefore
+# readable only by this job. Put required reviewers on that environment so a
+# person approves every run.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-validation
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Live database smoke
+    runs-on: ubuntu-latest
+
+    # Never for a pull request from a fork: an untrusted job must not be able
+    # to reach the production database.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+
+    environment: production
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version-file: .ruby-version
+          bundler-cache: true
+
+      - name: apply_or_verify_migrations
+        run: |
+          bundle exec rake db:migrate
+          bundle exec rake db:current
+
+      - name: run_live_smoke
+        run: bundle exec rake smoke:production
