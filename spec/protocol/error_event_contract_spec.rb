@@ -8,16 +8,17 @@ require 'rspec'
 
 RSpec.describe 'errors.v1 error event contract' do
   let(:root) { File.expand_path('../..', __dir__) }
-  let(:schema_path) { File.join(root, 'protocol/errors.v1/error-event.schema.json') }
-  let(:valid_fixture_path) do
-    File.join(root, 'protocol/errors.v1/fixtures/error-event.valid.json')
+  let(:schema) do
+    JSON.parse(File.read(File.join(root, 'protocol/errors.v1/error-event.schema.json')))
   end
-  let(:invalid_fixture_path) do
-    File.join(root, 'protocol/errors.v1/fixtures/error-event.invalid-unknown-field.json')
+  let(:valid_event) do
+    path = File.join(root, 'protocol/errors.v1/fixtures/error-event.valid.json')
+    JSON.parse(File.read(path))
   end
-  let(:schema) { JSON.parse(File.read(schema_path)) }
-  let(:valid_event) { JSON.parse(File.read(valid_fixture_path)) }
-  let(:invalid_event) { JSON.parse(File.read(invalid_fixture_path)) }
+  let(:invalid_event) do
+    path = File.join(root, 'protocol/errors.v1/fixtures/error-event.invalid-unknown-field.json')
+    JSON.parse(File.read(path))
+  end
 
   it 'pins the protocol version and rejects unknown top-level fields' do
     expect(schema.dig('properties', 'protocol_version', 'const')).to eq('errors.v1')
@@ -35,9 +36,9 @@ RSpec.describe 'errors.v1 error event contract' do
     error_pattern = Regexp.new(schema.dig('properties', 'error_id', 'pattern'))
     family_pattern = Regexp.new(schema.dig('properties', 'family_id', 'pattern'))
 
-    expect('ai.model.load.failed').to match(error_pattern)
-    expect('ai.model-load.failed').not_to match(error_pattern)
-    expect('family.ai.model.availability').to match(family_pattern)
+    expect(error_pattern.match?('ai.model.load.failed')).to be(true)
+    expect(error_pattern.match?('ai.model-load.failed')).to be(false)
+    expect(family_pattern.match?('family.ai.model.availability')).to be(true)
   end
 
   it 'does not invent a closed severity vocabulary in errors.v1' do
