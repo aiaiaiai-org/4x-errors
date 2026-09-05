@@ -12,10 +12,10 @@ Required fields:
 
 - `protocol_version` — exactly `errors.v1`.
 - `event_id` — UUID for this occurrence.
-- `error_id` — stable semantic identifier such as `ai.model.load.failed`.
+- `error_id` — stable lowercase dot-separated semantic identifier such as `ai.model.load.failed`.
 - `project` — reporting project identity.
 - `source` — component or boundary that observed the failure.
-- `severity` — `debug`, `info`, `warning`, `error` or `critical`.
+- `severity` — non-empty severity label supplied by the producer; `errors.v1` does not prescribe a fixed vocabulary.
 - `message` — concise human-readable summary, maximum 4096 characters.
 - `full_text` — extended diagnostic text, maximum 32768 characters.
 - `observed_at` — RFC 3339 / JSON Schema `date-time` timestamp.
@@ -24,7 +24,7 @@ Required fields:
 
 Optional fields:
 
-- `family_id` — known semantic family, or `null`.
+- `family_id` — known `family.<domain>.<topic>` semantic family, or `null`.
 - `caused_by_event_id` — UUID of a directly preceding causal event when explicitly known, or `null`.
 - `correlation_id` — application-defined correlation identifier, or `null`.
 
