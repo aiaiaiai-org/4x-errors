@@ -37,8 +37,11 @@ test('handles circular context without throwing', () => {
 
 test('bounds serialized context to the errors.v1 transport limit', () => {
   const context = sanitizeContext({
-    first: 'x'.repeat(12_000),
-    second: 'y'.repeat(12_000)
+    first: 'a'.repeat(5_000),
+    second: 'b'.repeat(5_000),
+    third: 'c'.repeat(5_000),
+    fourth: 'd'.repeat(5_000),
+    fifth: 'e'.repeat(5_000)
   });
   const bytes = new TextEncoder().encode(JSON.stringify(context)).byteLength;
 
