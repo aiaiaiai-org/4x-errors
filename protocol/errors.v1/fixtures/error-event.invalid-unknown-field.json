@@ -1,0 +1,14 @@
+{
+  "protocol_version": "errors.v1",
+  "event_id": "7b197a35-1b2c-4b26-9950-8fc42382e7df",
+  "error_id": "ai.model.load.failed",
+  "project": "nilx-one/web",
+  "source": "avaia.model-loader",
+  "severity": "error",
+  "message": "Local model failed to load",
+  "full_text": "The local AI model could not be prepared for the current device.",
+  "observed_at": "2026-09-05T06:22:00Z",
+  "context": {},
+  "tags": [],
+  "unexpected": true
+}
