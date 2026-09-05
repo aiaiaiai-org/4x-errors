@@ -40,7 +40,7 @@ same key and be certain the occurrence is stored once.
 
 They return `nil` or a boolean. They never raise into the caller, and they
 never block it on the network. That is the invariant the SDK exists to protect,
-and `spec/sdk/reporting_spec.rb` is written as a list of ways to violate it.
+and `spec/aiaiaiai/errors_spec.rb` is written as a list of ways to violate it.
 
 Concretely, the reporting path is bounded at every point:
 

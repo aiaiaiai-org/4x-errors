@@ -1,15 +1,18 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
 
-# The collector is IO bound and small. Threads carry the concurrency; workers
-# exist so that one wedged process cannot take the endpoint down with it.
-threads_count = Integer(ENV.fetch("RAILS_MAX_THREADS", ENV.fetch("PUMA_THREADS", "8")))
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+# The collector is IO bound and small, so threads carry the concurrency.
+threads_count = Integer(ENV.fetch('PUMA_THREADS', '8'))
 threads threads_count, threads_count
 
-port Integer(ENV.fetch("PORT", "8080"))
-environment ENV.fetch("RACK_ENV", "production")
+port Integer(ENV.fetch('PORT', '9292'))
+environment ENV.fetch('RACK_ENV', 'production')
 
-workers Integer(ENV.fetch("WEB_CONCURRENCY", "2"))
+# Single mode by default. Raise WEB_CONCURRENCY to run workers; the hooks below
+# make that safe.
+workers Integer(ENV.fetch('WEB_CONCURRENCY', '0'))
 preload_app!
 
 # Bounded, so a hung request cannot hold a thread forever.

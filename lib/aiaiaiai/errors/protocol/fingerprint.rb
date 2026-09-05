@@ -1,7 +1,9 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
 
-require "digest"
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+require 'digest'
 
 module Aiaiaiai
   module Errors
@@ -13,28 +15,28 @@ module Aiaiaiai
       # failure message, never from its variable parts, so the same failure
       # keeps one fingerprint across hosts, requests and refactors.
       module Fingerprint
-        PREFIX = "sha256:"
+        PREFIX = 'sha256:'
 
         NOISE = [
-          [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i, "<uuid>"],
-          [/\b0x[0-9a-f]+\b/i, "<hex>"],
-          [%r{\b[a-z]?[:/][^\s"']*[/\\][^\s"']*}i, "<path>"],
-          [/\b\d+\b/, "<n>"],
-          [/"[^"]*"/, "<str>"],
-          [/'[^']*'/, "<str>"]
+          [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i, '<uuid>'],
+          [/\b0x[0-9a-f]+\b/i, '<hex>'],
+          [%r{\b[a-z]?[:/][^\s"']*[/\\][^\s"']*}i, '<path>'],
+          [/\b\d+\b/, '<n>'],
+          [/"[^"]*"/, '<str>'],
+          [/'[^']*'/, '<str>']
         ].freeze
 
         module_function
 
         def for(event)
-          existing = event["fingerprint"]
+          existing = event['fingerprint']
           return existing if existing && !existing.empty?
 
-          exception = event["exception"]
+          exception = event['exception']
           derive(
-            event["error_id"],
-            exception && exception["type"],
-            (exception && exception["message"]) || event["message"]
+            event['error_id'],
+            exception && exception['type'],
+            (exception && exception['message']) || event['message']
           )
         end
 
@@ -46,9 +48,11 @@ module Aiaiaiai
         # Collapses the variable parts of a message so that only its shape
         # contributes to the fingerprint.
         def shape(message)
-          return "" if message.nil?
+          return '' if message.nil?
 
-          NOISE.reduce(message.to_s) { |carry, (pattern, placeholder)| carry.gsub(pattern, placeholder) }
+          NOISE.reduce(message.to_s) do |carry, (pattern, placeholder)|
+            carry.gsub(pattern, placeholder)
+          end
         end
       end
     end

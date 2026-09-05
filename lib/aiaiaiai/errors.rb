@@ -1,13 +1,15 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
 
-require_relative "errors/version"
-require_relative "errors/configuration"
-require_relative "errors/protocol"
-require_relative "errors/payload"
-require_relative "errors/recursion_guard"
-require_relative "errors/reporter"
-require_relative "errors/null_reporter"
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+require_relative 'errors/version'
+require_relative 'errors/configuration'
+require_relative 'errors/protocol'
+require_relative 'errors/payload'
+require_relative 'errors/recursion_guard'
+require_relative 'errors/reporter'
+require_relative 'errors/null_reporter'
 
 module Aiaiaiai
   # Reporting side of errors.v1.
@@ -52,7 +54,7 @@ module Aiaiaiai
 
       # Reports an exception under a stable semantic identity.
       def capture(exception, error_id:, family_id: nil, context: {}, tags: {},
-        severity: nil, component: nil, occurrence_key: nil)
+                  severity: nil, component: nil, occurrence_key: nil)
         safely do
           reporter.report(
             Payload.event(
@@ -67,7 +69,7 @@ module Aiaiaiai
 
       # Reports a failure that is not carried by an exception object.
       def report(error_id:, message: nil, family_id: nil, context: {}, tags: {},
-        severity: nil, component: nil, occurrence_key: nil)
+                 severity: nil, component: nil, occurrence_key: nil)
         safely do
           reporter.report(
             Payload.event(
@@ -143,8 +145,8 @@ module Aiaiaiai
       def safely
         RecursionGuard.guard do
           yield
-        rescue => error
-          note_internal_error(error)
+        rescue StandardError => e
+          note_internal_error(e)
           nil
         end
       end
@@ -154,7 +156,7 @@ module Aiaiaiai
         handler&.call(error)
         @configuration&.logger&.debug { "[aiaiaiai-errors] #{error.class}: #{error.message}" }
         nil
-      rescue
+      rescue StandardError
         nil
       end
     end

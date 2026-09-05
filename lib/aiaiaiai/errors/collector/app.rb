@@ -1,8 +1,10 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
 
-require "json"
-require "roda"
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+require 'json'
+require 'roda'
 
 module Aiaiaiai
   module Errors
@@ -15,18 +17,18 @@ module Aiaiaiai
       # through endpoints exposed to reporters.
       class App < Roda
         plugin :default_headers,
-          "content-type" => "application/json; charset=utf-8",
-          "cache-control" => "no-store",
-          "x-content-type-options" => "nosniff"
+               'content-type' => 'application/json; charset=utf-8',
+               'cache-control' => 'no-store',
+               'x-content-type-options' => 'nosniff'
         plugin :halt
         plugin :error_handler do |error|
           logger&.error("#{error.class}: #{error.message}")
           response.status = 500
           # Never let an internal failure describe itself to a reporter.
-          json(error: "internal_error")
+          json(error: 'internal_error')
         end
         plugin :not_found do
-          json(error: "not_found")
+          json(error: 'not_found')
         end
 
         # Builds a runnable application around its dependencies.
@@ -39,12 +41,12 @@ module Aiaiaiai
         end
 
         route do |r|
-          r.get "health" do
+          r.get 'health' do
             health
           end
 
-          r.on "v1" do
-            r.post "events" do
+          r.on 'v1' do
+            r.post 'events' do
               ingest
             end
           end
@@ -56,15 +58,16 @@ module Aiaiaiai
           reachable = Database.reachable?(opts[:database])
           response.status = reachable ? 200 : 503
           json(
-            status: reachable ? "ok" : "degraded",
-            database: reachable ? "ok" : "unreachable",
+            status: reachable ? 'ok' : 'degraded',
+            database: reachable ? 'ok' : 'unreachable',
             protocol_version: Protocol::VERSION
           )
         end
 
         def ingest
           body = read_bounded_body
-          result = opts[:ingest].call(authorization: request.get_header("HTTP_AUTHORIZATION"), raw_body: body)
+          result = opts[:ingest].call(authorization: request.get_header('HTTP_AUTHORIZATION'),
+                                      raw_body: body)
           response.status = result.status
           result.to_json
         end
@@ -76,7 +79,7 @@ module Aiaiaiai
           declared = request.content_length&.to_i
           return too_large(limit) if declared && declared > limit
 
-          body = request.body&.read(limit + 1) || ""
+          body = request.body&.read(limit + 1) || ''
           return too_large(limit) if body.bytesize > limit
 
           body
@@ -84,8 +87,8 @@ module Aiaiaiai
 
         def too_large(limit)
           response.status = 413
-          request.halt([413, {"content-type" => "application/json; charset=utf-8"},
-            [json(error: "payload_too_large", limit_bytes: limit)]])
+          request.halt([413, { 'content-type' => 'application/json; charset=utf-8' },
+                        [json(error: 'payload_too_large', limit_bytes: limit)]])
         end
 
         def json(**body)

@@ -103,7 +103,7 @@ lib/…/protocol/    the vocabulary, limits, validation, scrubbing and fingerpri
 lib/…/collector/   the Roda application, the ingest pipeline and the store
 lib/…/             the Ruby SDK: reporter, bounded queue, circuit breaker, transport
 db/migrations/     the schema, its indexes, its constraints and its access rules
-spec/              the test suite, including the conformance run over the fixtures
+spec/aiaiaiai/     the test suite, mirroring lib/, including the conformance run
 ```
 
 ## Working on it

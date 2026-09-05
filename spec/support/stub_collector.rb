@@ -1,7 +1,9 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
 
-require "socket"
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+require 'socket'
 
 # A collector that behaves badly on purpose.
 #
@@ -10,11 +12,12 @@ require "socket"
 # at that level.
 class StubCollector
   RESPONSES = {
-    accepted: ["202 Accepted", '{"accepted":1,"events":[{"event_id":"018f0000-0000-7000-8000-000000000000"}]}'],
-    unauthorized: ["401 Unauthorized", '{"error":"unauthorized"}'],
-    forbidden: ["403 Forbidden", '{"error":"project_mismatch"}'],
-    server_error: ["500 Internal Server Error", '{"error":"internal_error"}'],
-    too_many_requests: ["429 Too Many Requests", '{"error":"slow_down"}']
+    accepted: ['202 Accepted',
+               '{"accepted":1,"events":[{"event_id":"018f0000-0000-7000-8000-000000000000"}]}'],
+    unauthorized: ['401 Unauthorized', '{"error":"unauthorized"}'],
+    forbidden: ['403 Forbidden', '{"error":"project_mismatch"}'],
+    server_error: ['500 Internal Server Error', '{"error":"internal_error"}'],
+    too_many_requests: ['429 Too Many Requests', '{"error":"slow_down"}']
   }.freeze
 
   attr_reader :port, :requests
@@ -25,13 +28,13 @@ class StubCollector
     @mode = mode
     @requests = []
     @mutex = Mutex.new
-    @server = TCPServer.new("127.0.0.1", 0)
+    @server = TCPServer.new('127.0.0.1', 0)
     @port = @server.addr[1]
     @thread = Thread.new { serve }
     @thread.report_on_exception = false
   end
 
-  def endpoint(scheme: "http")
+  def endpoint(scheme: 'http')
     "#{scheme}://127.0.0.1:#{port}"
   end
 
@@ -69,10 +72,13 @@ class StubCollector
       socket.close
     else
       status, body = RESPONSES.fetch(@mode)
-      socket.write("HTTP/1.1 #{status}\r\nContent-Type: application/json\r\nContent-Length: #{body.bytesize}\r\nConnection: close\r\n\r\n#{body}")
+      socket.write("HTTP/1.1 #{status}\r\n" \
+                   "Content-Type: application/json\r\n" \
+                   "Content-Length: #{body.bytesize}\r\n" \
+                   "Connection: close\r\n\r\n#{body}")
       socket.close
     end
-  rescue
+  rescue StandardError
     close(socket)
   end
 
@@ -83,10 +89,10 @@ class StubCollector
   end
 
   def read_request(socket)
-    headers = +""
+    headers = +''
     headers << socket.readpartial(1) until headers.end_with?("\r\n\r\n")
     length = headers[/^content-length:\s*(\d+)/i, 1].to_i
-    body = length.positive? ? socket.read(length) : ""
-    {headers: headers, body: body}
+    body = length.positive? ? socket.read(length) : ''
+    { headers: headers, body: body }
   end
 end

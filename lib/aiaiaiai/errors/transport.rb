@@ -1,12 +1,14 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
 
-require "json"
-require "net/http"
-require "openssl"
-require "uri"
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
 
-require_relative "version"
+require 'json'
+require 'net/http'
+require 'openssl'
+require 'uri'
+
+require_relative 'version'
 
 module Aiaiaiai
   module Errors
@@ -20,22 +22,15 @@ module Aiaiaiai
       TRANSIENT_FAILURE = :transient_failure
       PERMANENT_FAILURE = :permanent_failure
 
-      EVENTS_PATH = "/v1/events"
-
-      # Everything a network can do to a request.
-      NETWORK_FAILURES = [
-        SocketError, IOError, EOFError, SystemCallError,
-        Net::OpenTimeout, Net::ReadTimeout, Net::WriteTimeout,
-        Net::HTTPBadResponse, Net::HTTPHeaderSyntaxError, Net::ProtocolError,
-        OpenSSL::SSL::SSLError, Timeout::Error
-      ].freeze
+      EVENTS_PATH = '/v1/events'
 
       # Statuses worth trying again: the collector is busy or briefly broken.
       RETRYABLE_STATUSES = [408, 425, 429].freeze
 
       def initialize(configuration)
         @configuration = configuration
-        @uri = URI.join(ensure_trailing_slash(configuration.endpoint), EVENTS_PATH.delete_prefix("/"))
+        @uri = URI.join(ensure_trailing_slash(configuration.endpoint),
+                        EVENTS_PATH.delete_prefix('/'))
       rescue URI::InvalidURIError, ArgumentError
         @uri = nil
       end
@@ -50,9 +45,11 @@ module Aiaiaiai
       rescue JSON::GeneratorError, Encoding::UndefinedConversionError
         # An unserialisable payload will never become serialisable.
         PERMANENT_FAILURE
-      rescue *NETWORK_FAILURES
-        TRANSIENT_FAILURE
-      rescue
+      rescue StandardError
+        # Everything a network can do to a request arrives here: SocketError,
+        # SystemCallError, the Net::HTTP timeouts and protocol errors,
+        # OpenSSL::SSL::SSLError. None of them is worth distinguishing, because
+        # the answer to all of them is the same.
         TRANSIENT_FAILURE
       end
 
@@ -60,9 +57,9 @@ module Aiaiaiai
 
       def perform(body)
         request = Net::HTTP::Post.new(uri.request_uri)
-        request["content-type"] = "application/json"
-        request["authorization"] = "Bearer #{configuration.token}"
-        request["user-agent"] = "#{SDK_NAME}/#{VERSION}"
+        request['content-type'] = 'application/json'
+        request['authorization'] = "Bearer #{configuration.token}"
+        request['user-agent'] = "#{SDK_NAME}/#{VERSION}"
         request.body = body
 
         http.start { |connection| connection.request(request) }
@@ -70,7 +67,7 @@ module Aiaiaiai
 
       def http
         connection = build_connection
-        connection.use_ssl = uri.scheme == "https"
+        connection.use_ssl = uri.scheme == 'https'
         connection.open_timeout = configuration.open_timeout
         connection.read_timeout = configuration.read_timeout
         connection.write_timeout = configuration.write_timeout
@@ -81,10 +78,12 @@ module Aiaiaiai
         case configuration.proxy
         when :environment then Net::HTTP.new(uri.host, uri.port)
         when nil, false then Net::HTTP.new(uri.host, uri.port, nil)
-        else
-          proxy = URI.parse(configuration.proxy.to_s)
-          Net::HTTP.new(uri.host, uri.port, proxy.host, proxy.port, proxy.user, proxy.password)
+        else proxied_connection(URI.parse(configuration.proxy.to_s))
         end
+      end
+
+      def proxied_connection(proxy)
+        Net::HTTP.new(uri.host, uri.port, proxy.host, proxy.port, proxy.user, proxy.password)
       end
 
       def classify(response)
@@ -97,7 +96,7 @@ module Aiaiaiai
       end
 
       def ensure_trailing_slash(endpoint)
-        endpoint.to_s.end_with?("/") ? endpoint.to_s : "#{endpoint}/"
+        endpoint.to_s.end_with?('/') ? endpoint.to_s : "#{endpoint}/"
       end
     end
   end

@@ -1,11 +1,13 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
 
-require_relative "bounded_queue"
-require_relative "circuit_breaker"
-require_relative "payload"
-require_relative "recursion_guard"
-require_relative "transport"
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+require_relative 'bounded_queue'
+require_relative 'circuit_breaker'
+require_relative 'payload'
+require_relative 'recursion_guard'
+require_relative 'transport'
 
 module Aiaiaiai
   module Errors
@@ -76,7 +78,8 @@ module Aiaiaiai
       end
 
       def statistics
-        {queued: @queue.size, dropped: @queue.dropped + @abandoned, circuit: @breaker.state, null: false}
+        { queued: @queue.size, dropped: @queue.dropped + @abandoned, circuit: @breaker.state,
+          null: false }
       end
 
       private
@@ -102,7 +105,7 @@ module Aiaiaiai
           next if @thread&.alive?
 
           @thread = Thread.new { run }
-          @thread.name = "aiaiaiai-errors-reporter"
+          @thread.name = 'aiaiaiai-errors-reporter'
           @thread.abort_on_exception = false
           @thread.report_on_exception = false
         end
@@ -123,44 +126,43 @@ module Aiaiaiai
             @delivering = false
           end
         end
-      rescue
+      rescue StandardError
         # The reporter is not worth a host thread. It restarts on next use.
         nil
       end
 
       def deliver(batch)
-        document = Payload.request(
-          project: configuration.project,
-          events: batch.filter_map { |item| item[:data] if item[:kind] == :event },
-          relations: batch.filter_map { |item| item[:data] if item[:kind] == :relation }
-        )
-
+        document = document_for(batch)
         attempt = 0
+
         loop do
           unless @breaker.allow?
             @abandoned += batch.size
             return
           end
 
-          case @transport.deliver(document)
-          when Transport::DELIVERED
-            @breaker.record_success
-            return
-          when Transport::PERMANENT_FAILURE
-            # A rejected request is rejected however often it is sent.
-            @breaker.record_failure
+          outcome = @transport.deliver(document)
+          return @breaker.record_success if outcome == Transport::DELIVERED
+
+          @breaker.record_failure
+          # A rejected request is rejected however often it is sent.
+          attempt += 1
+          if outcome == Transport::PERMANENT_FAILURE ||
+             attempt > configuration.max_retries || @stopping
             @abandoned += batch.size
             return
-          else
-            @breaker.record_failure
-            attempt += 1
-            if attempt > configuration.max_retries || @stopping
-              @abandoned += batch.size
-              return
-            end
-            sleep backoff(attempt)
           end
+
+          sleep backoff(attempt)
         end
+      end
+
+      def document_for(batch)
+        Payload.request(
+          project: configuration.project,
+          events: batch.filter_map { |item| item[:data] if item[:kind] == :event },
+          relations: batch.filter_map { |item| item[:data] if item[:kind] == :relation }
+        )
       end
 
       # Exponential, capped, and jittered so that many hosts recovering at once

@@ -1,5 +1,7 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
+
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
 
 module Aiaiaiai
   module Errors
@@ -11,7 +13,7 @@ module Aiaiaiai
       # same rules before sending, so a secret does not travel at all when the
       # reporter is well behaved.
       module Scrubber
-        REDACTED = "[redacted]"
+        REDACTED = '[redacted]'
 
         SENSITIVE_KEY = /
           pass(word|wd|phrase)? | secret | token | credential | cookie |
@@ -24,7 +26,7 @@ module Aiaiaiai
           # URL with inline credentials: postgres://user:password@host/db
           %r{\b([a-z][a-z0-9+.-]*://)[^\s:/@]+:[^\s/@]+@}i,
           # Authorization headers pasted into free text
-          /\b(bearer|basic|token)\s+[A-Za-z0-9._~+\/=-]{8,}/i,
+          %r{\b(bearer|basic|token)\s+[A-Za-z0-9._~+/=-]{8,}}i,
           # JSON web tokens
           /\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\b/,
           # PEM private key blocks
@@ -38,7 +40,9 @@ module Aiaiaiai
           return REDACTED if key && SENSITIVE_KEY.match?(key.to_s)
 
           case value
-          when Hash then value.to_h { |nested_key, nested| [nested_key, scrub(nested, key: nested_key)] }
+          when Hash then value.to_h do |nested_key, nested|
+            [nested_key, scrub(nested, key: nested_key)]
+          end
           when Array then value.map { |nested| scrub(nested) }
           when String then scrub_string(value)
           else value
@@ -47,10 +51,10 @@ module Aiaiaiai
 
         def scrub_string(string)
           SENSITIVE_VALUE.reduce(string) do |carry, pattern|
-            carry.gsub(pattern) do |match|
+            carry.gsub(pattern) do |_match|
               # Keep the scheme of a credentialed URL, it is diagnostic and not secret.
               scheme = Regexp.last_match(1)
-              scheme&.end_with?("://") ? "#{scheme}#{REDACTED}@" : REDACTED
+              scheme&.end_with?('://') ? "#{scheme}#{REDACTED}@" : REDACTED
             end
           end
         end

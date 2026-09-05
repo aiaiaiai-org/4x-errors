@@ -1,46 +1,45 @@
 # © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
 
-# Keep in step with .ruby-version; CI fails if the two disagree.
-ARG RUBY_VERSION=4.0.6
-
-FROM ruby:${RUBY_VERSION}-slim AS build
-
-ENV BUNDLE_DEPLOYMENT=1 \
-    BUNDLE_PATH=/usr/local/bundle \
-    BUNDLE_WITHOUT=development:test
+FROM ruby:4.0.6-slim AS build
 
 WORKDIR /app
 
-RUN apt-get update -qq \
- && apt-get install --no-install-recommends -y build-essential libpq-dev \
- && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends build-essential libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY Gemfile Gemfile.lock ./
-RUN bundle install \
- && rm -rf "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git
+COPY Gemfile Gemfile.lock .ruby-version ./
+RUN bundle config set deployment 'true' \
+    && bundle config set without 'development test' \
+    && bundle install
 
-COPY . .
+FROM ruby:4.0.6-slim
 
-FROM ruby:${RUBY_VERSION}-slim
+WORKDIR /app
 
-ENV BUNDLE_DEPLOYMENT=1 \
-    BUNDLE_PATH=/usr/local/bundle \
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends libpq5 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --shell /usr/sbin/nologin collector
+
+COPY --from=build /usr/local/bundle /usr/local/bundle
+COPY Gemfile Gemfile.lock .ruby-version config.ru ./
+COPY config config
+COPY db db
+COPY lib lib
+COPY protocol protocol
+
+# The runtime carries no development or test gems, so bundler must be told not
+# to look for them.
+ENV RACK_ENV=production \
+    BUNDLE_DEPLOYMENT=true \
     BUNDLE_WITHOUT=development:test \
-    RACK_ENV=production \
-    PORT=8080
+    PORT=9292
 
-RUN apt-get update -qq \
- && apt-get install --no-install-recommends -y libpq5 \
- && rm -rf /var/lib/apt/lists/* \
- && useradd --create-home --shell /usr/sbin/nologin collector
-
-WORKDIR /app
-COPY --from=build ${BUNDLE_PATH} ${BUNDLE_PATH}
-COPY --from=build --chown=collector:collector /app /app
-
+# No credentials are baked in: DATABASE_URL and ERRORS_INGEST_TOKENS are read
+# from the runtime environment.
 USER collector
-EXPOSE 8080
+EXPOSE 9292
 
-# No credentials are baked in: the collector reads DATABASE_URL and
-# ERRORS_INGEST_TOKENS from its runtime environment.
 CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]

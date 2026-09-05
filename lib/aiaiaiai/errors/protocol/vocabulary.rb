@@ -1,5 +1,7 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
+
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
 
 module Aiaiaiai
   module Errors
@@ -9,10 +11,10 @@ module Aiaiaiai
       # Everything here is part of the wire contract: changing a value is a
       # protocol change and requires a new protocol version.
       module Vocabulary
-        VERSION = "errors.v1"
+        VERSION = 'errors.v1'
 
         SEVERITIES = %w[debug info warning error critical].freeze
-        DEFAULT_SEVERITY = "error"
+        DEFAULT_SEVERITY = 'error'
 
         # Causal relations, expressed as the canonical cause -> effect edge they
         # contribute to the causal graph.
@@ -20,16 +22,16 @@ module Aiaiaiai
         #   :forward  source is the cause, target is the effect
         #   :backward target is the cause, source is the effect
         CAUSAL_RELATIONS = {
-          "root_cause_of" => :forward,
-          "contributes_to" => :forward,
-          "derivative_of" => :backward,
-          "triggered_by" => :backward
+          'root_cause_of' => :forward,
+          'contributes_to' => :forward,
+          'derivative_of' => :backward,
+          'triggered_by' => :backward
         }.freeze
 
         # Relations that carry no causal claim at all.
         NON_CAUSAL_RELATIONS = {
-          "correlated_with" => :nondirectional,
-          "duplicate_of" => :alias_to_canonical
+          'correlated_with' => :nondirectional,
+          'duplicate_of' => :alias_to_canonical
         }.freeze
 
         RELATION_TYPES = (CAUSAL_RELATIONS.keys + NON_CAUSAL_RELATIONS.keys).freeze

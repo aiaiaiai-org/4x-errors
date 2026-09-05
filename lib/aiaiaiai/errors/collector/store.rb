@@ -1,7 +1,9 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
 
-require "sequel"
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+require 'sequel'
 
 module Aiaiaiai
   module Errors
@@ -21,7 +23,8 @@ module Aiaiaiai
         # a cycle.
         CAUSAL_GRAPH_LOCK = 0x4e5252
 
-        CycleRejected = Class.new(StandardError)
+        class CycleRejected < StandardError
+        end
 
         def initialize(db)
           @db = db
@@ -34,11 +37,15 @@ module Aiaiaiai
         def record(events:, relations:, received_at:)
           db.transaction do
             stored = events.map { |event| record_event(event, received_at) }
-            ids_by_local_ref = events.each_with_index.to_h { |event, index| [event[:local_ref], stored[index][:event_id]] }
+            ids_by_local_ref = events.each_with_index.to_h do |event, index|
+              [event[:local_ref], stored[index][:event_id]]
+            end
             ids_by_local_ref.delete(nil)
 
-            relation_results = relations.map { |relation| record_relation(relation, ids_by_local_ref) }
-            {events: stored, relations: relation_results}
+            relation_results = relations.map do |relation|
+              record_relation(relation, ids_by_local_ref)
+            end
+            { events: stored, relations: relation_results }
           end
         end
 
@@ -48,48 +55,55 @@ module Aiaiaiai
           row = event.except(:local_ref).merge(received_at: received_at)
 
           register_error(row[:error_id], received_at)
-          if row[:reported_family_id]
-            register_family(row[:reported_family_id], received_at)
-            record_reported_membership(row[:error_id], row[:reported_family_id], received_at)
-          end
+          resolve_reported_family(row, received_at)
 
           inserted = db[:error_events]
-            .insert_conflict(target: [:project, :occurrence_key], conflict_where: Sequel.~(occurrence_key: nil))
-            .returning(:id)
-            .insert(row)
-
-          return {event_id: inserted.first[:id], duplicate: false} unless inserted.empty?
+                     .insert_conflict(target: %i[project occurrence_key],
+                                      conflict_where: Sequel.~(occurrence_key: nil))
+                     .returning(:id)
+                     .insert(row)
+          return { event_id: inserted.first[:id], duplicate: false } unless inserted.empty?
 
           existing = db[:error_events]
-            .where(project: row[:project], occurrence_key: row[:occurrence_key])
-            .get(:id)
-          {event_id: existing, duplicate: true}
+                     .where(project: row[:project], occurrence_key: row[:occurrence_key])
+                     .get(:id)
+          { event_id: existing, duplicate: true }
+        end
+
+        def resolve_reported_family(row, received_at)
+          return if row[:reported_family_id].nil?
+
+          register_family(row[:reported_family_id], received_at)
+          record_reported_membership(row[:error_id], row[:reported_family_id], received_at)
         end
 
         def register_error(error_id, seen_at)
           db[:error_definitions]
-            .insert_conflict(target: :error_id, update: {last_seen_at: seen_at, updated_at: seen_at})
+            .insert_conflict(target: :error_id, update: { last_seen_at: seen_at,
+                                                          updated_at: seen_at })
             .insert(error_id: error_id, auto_registered: true,
-              first_seen_at: seen_at, last_seen_at: seen_at,
-              created_at: seen_at, updated_at: seen_at)
+                    first_seen_at: seen_at, last_seen_at: seen_at,
+                    created_at: seen_at, updated_at: seen_at)
         end
 
         def register_family(family_id, seen_at)
           db[:error_families]
             .insert_conflict(target: :family_id)
-            .insert(family_id: family_id, title: family_id, created_at: seen_at, updated_at: seen_at)
+            .insert(family_id: family_id, title: family_id,
+                    created_at: seen_at, updated_at: seen_at)
         end
 
         # A family reported by an SDK is recorded once. If curation later
         # supersedes that membership, reports do not resurrect it: the
         # superseded row stays and no new one is created.
         def record_reported_membership(error_id, family_id, seen_at)
-          return if db[:error_family_memberships].where(error_id: error_id, family_id: family_id).count.positive?
+          existing = db[:error_family_memberships].where(error_id: error_id, family_id: family_id)
+          return unless existing.empty?
 
           db[:error_family_memberships].insert(
             error_id: error_id, family_id: family_id,
             confidence: 1.0, evidence: Sequel.pg_array(%w[explicit_reporter_relation], :text),
-            source: "reported", created_at: seen_at
+            source: 'reported', created_at: seen_at
           )
         rescue Sequel::UniqueConstraintViolation
           # Another transaction recorded the same membership first.
@@ -100,7 +114,7 @@ module Aiaiaiai
         # the error belongs to instead. Raw occurrences are untouched: they
         # keep the family their reporter claimed at the time.
         def reclassify(error_id:, from_family_id:, to_family_id: nil, evidence: %w[human_review],
-          confidence: 1.0, source: "curated", reason: nil, at: Time.now.utc)
+                       confidence: 1.0, source: 'curated', reason: nil, at: Time.now.utc)
           db.transaction do
             db[:error_family_memberships]
               .where(error_id: error_id, family_id: from_family_id, superseded_at: nil)
@@ -152,9 +166,15 @@ module Aiaiaiai
               %i[target_error_id source_error_id source_error_id target_error_id]
             end
 
-          forward = db[:error_relations].where(:relation_type => FORWARD, forward_match => error_id).select_map(forward_read)
-          backward = db[:error_relations].where(:relation_type => BACKWARD, backward_match => error_id).select_map(backward_read)
+          forward = neighbours(FORWARD, forward_match, error_id, forward_read)
+          backward = neighbours(BACKWARD, backward_match, error_id, backward_read)
           (forward + backward).uniq.sort
+        end
+
+        def neighbours(types, match_column, error_id, read_column)
+          db[:error_relations]
+            .where(:relation_type => types, match_column => error_id)
+            .select_map(read_column)
         end
 
         def record_relation(relation, ids_by_local_ref)
@@ -162,7 +182,13 @@ module Aiaiaiai
           target = resolve_endpoint(relation[:target], ids_by_local_ref)
           error_level = relation[:source].key?(:error_id)
 
-          error_level ? insert_error_relation(relation, source, target) : insert_event_relation(relation, source, target)
+          if error_level
+            insert_error_relation(relation, source,
+                                  target)
+          else
+            insert_event_relation(relation, source,
+                                  target)
+          end
         end
 
         def resolve_endpoint(endpoint, ids_by_local_ref)
@@ -173,29 +199,32 @@ module Aiaiaiai
           guard_against_cycle(:error, relation[:type], source, target)
           register_error(source, relation[:created_at])
           register_error(target, relation[:created_at])
-          insert_relation(:error_relations, :source_error_id, :target_error_id, source, target, relation)
+          insert_relation(:error_relations, relation,
+                          columns: %i[source_error_id target_error_id], endpoints: [source, target])
         end
 
         def insert_event_relation(relation, source, target)
           guard_against_cycle(:event, relation[:type], source, target)
-          insert_relation(:event_relations, :source_event_id, :target_event_id, source, target, relation)
+          insert_relation(:event_relations, relation,
+                          columns: %i[source_event_id target_event_id], endpoints: [source, target])
         end
 
-        def insert_relation(table, source_column, target_column, source, target, relation)
-          row = {source_column => source, target_column => target}.merge(
+        def insert_relation(table, relation, columns:, endpoints:)
+          source_column, target_column = columns
+          row = columns.zip(endpoints).to_h.merge(
             relation_type: relation[:type],
             confidence: relation[:confidence],
             evidence: Sequel.pg_array(Array(relation[:evidence]), :text),
             note: relation[:note],
-            created_by: relation[:created_by] || "reporter",
+            created_by: relation[:created_by] || 'reporter',
             created_at: relation[:created_at]
           )
           inserted = db[table]
-            .insert_conflict(target: [source_column, :relation_type, target_column])
-            .returning(:id)
-            .insert(row)
+                     .insert_conflict(target: [source_column, :relation_type, target_column])
+                     .returning(:id)
+                     .insert(row)
 
-          {type: relation[:type], stored: !inserted.empty?}
+          { type: relation[:type], stored: !inserted.empty? }
         end
 
         # An effect may never be, transitively, its own cause.
@@ -213,9 +242,9 @@ module Aiaiaiai
         def reachable?(level, from:, to:)
           table, source_column, target_column, cast =
             if level == :error
-              ["error_relations", "source_error_id", "target_error_id", "text"]
+              %w[error_relations source_error_id target_error_id text]
             else
-              ["event_relations", "source_event_id", "target_event_id", "uuid"]
+              %w[event_relations source_event_id target_event_id uuid]
             end
 
           sql = <<~SQL

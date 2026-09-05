@@ -1,10 +1,12 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
 
-require "digest"
-require "json"
-require "openssl"
-require "securerandom"
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+require 'digest'
+require 'json'
+require 'openssl'
+require 'securerandom'
 
 module Aiaiaiai
   module Errors
@@ -16,7 +18,7 @@ module Aiaiaiai
       # authenticates exactly one project; the pipeline then refuses any
       # payload that claims to belong to a different one.
       class TokenStore
-        ENV_VAR = "ERRORS_INGEST_TOKENS"
+        ENV_VAR = 'ERRORS_INGEST_TOKENS'
         DIGEST_FORMAT = /\A[0-9a-f]{64}\z/
 
         class InvalidConfiguration < StandardError; end
@@ -27,7 +29,10 @@ module Aiaiaiai
           return new({}) if raw.empty?
 
           parsed = JSON.parse(raw)
-          raise InvalidConfiguration, "#{ENV_VAR} must be a JSON object of project => [digest]" unless parsed.is_a?(Hash)
+          unless parsed.is_a?(Hash)
+            raise InvalidConfiguration,
+                  "#{ENV_VAR} must be a JSON object of project => [digest]"
+          end
 
           new(parsed)
         rescue JSON::ParserError
@@ -41,8 +46,8 @@ module Aiaiaiai
         # Mints a token and the digest to configure for it. The token itself is
         # never stored anywhere by this system.
         def self.issue(project)
-          token = "#{project.tr("/", "_")}.#{SecureRandom.urlsafe_base64(32)}"
-          {project: project, token: token, digest: digest(token)}
+          token = "#{project.tr('/', '_')}.#{SecureRandom.urlsafe_base64(32)}"
+          { project: project, token: token, digest: digest(token) }
         end
 
         def initialize(digests_by_project)
@@ -51,7 +56,8 @@ module Aiaiaiai
             Array(digests).each do |value|
               normalised = value.to_s.downcase
               unless DIGEST_FORMAT.match?(normalised)
-                raise InvalidConfiguration, "#{project} is configured with something that is not a SHA-256 digest"
+                raise InvalidConfiguration,
+                      "#{project} is configured with something that is not a SHA-256 digest"
               end
 
               @projects_by_digest[normalised] = project.to_s

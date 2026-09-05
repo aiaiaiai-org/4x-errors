@@ -1,5 +1,7 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
+
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
 
 module Aiaiaiai
   module Errors
@@ -9,18 +11,18 @@ module Aiaiaiai
     # An incomplete configuration is not an error: it produces a null reporter.
     class Configuration
       attr_accessor :endpoint, :token, :project, :environment, :component,
-        :queue_limit, :batch_size, :flush_interval,
-        :open_timeout, :read_timeout, :write_timeout,
-        :max_retries, :backoff, :backoff_max,
-        :failure_threshold, :circuit_reset_after,
-        :shutdown_timeout, :proxy, :logger, :on_internal_error
+                    :queue_limit, :batch_size, :flush_interval,
+                    :open_timeout, :read_timeout, :write_timeout,
+                    :max_retries, :backoff, :backoff_max,
+                    :failure_threshold, :circuit_reset_after,
+                    :shutdown_timeout, :proxy, :logger, :on_internal_error
 
       def initialize
-        @endpoint = ENV["ERRORS_ENDPOINT"]
-        @token = ENV["ERRORS_TOKEN"]
-        @project = ENV["ERRORS_PROJECT"]
-        @environment = ENV["ERRORS_ENVIRONMENT"] || ENV["RACK_ENV"] || "development"
-        @component = ENV["ERRORS_COMPONENT"]
+        @endpoint = ENV.fetch('ERRORS_ENDPOINT', nil)
+        @token = ENV.fetch('ERRORS_TOKEN', nil)
+        @project = ENV.fetch('ERRORS_PROJECT', nil)
+        @environment = ENV['ERRORS_ENVIRONMENT'] || ENV['RACK_ENV'] || 'development'
+        @component = ENV.fetch('ERRORS_COMPONENT', nil)
 
         @queue_limit = 1_000
         @batch_size = 32

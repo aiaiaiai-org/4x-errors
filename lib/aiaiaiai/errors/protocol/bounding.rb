@@ -1,10 +1,12 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
 
-require "json"
-require "time"
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
 
-require_relative "limits"
+require 'json'
+require 'time'
+
+require_relative 'limits'
 
 module Aiaiaiai
   module Errors
@@ -16,15 +18,15 @@ module Aiaiaiai
       # payload the collector will accept. Values that cannot be represented
       # are replaced, not reported.
       module Bounding
-        TRUNCATED = "[truncated]"
-        UNSERIALISABLE = "[unserialisable]"
-        DROPPED_KEYS = "_dropped_keys"
+        TRUNCATED = '[truncated]'
+        UNSERIALISABLE = '[unserialisable]'
+        DROPPED_KEYS = '_dropped_keys'
 
         module_function
 
         def context(value)
           bounded = coerce(value, 1)
-          bounded = {"value" => bounded} unless bounded.is_a?(Hash)
+          bounded = { 'value' => bounded } unless bounded.is_a?(Hash)
           fit_bytes(bounded, Limits::CONTEXT_BYTES)
         end
 
@@ -47,20 +49,33 @@ module Aiaiaiai
         def exception(error, depth = 1)
           return nil if error.nil?
 
-          shape = {"type" => truncate(safe_string(error.class.name), Limits::EXCEPTION_TYPE_CHARS)}
-          shape["message"] = message(safe_string(error.message))
-          backtrace = error.backtrace
-          if backtrace.is_a?(Array) && !backtrace.empty?
-            shape["backtrace"] = backtrace.first(Limits::BACKTRACE_FRAMES)
-              .map { |frame| truncate(safe_string(frame), Limits::BACKTRACE_FRAME_CHARS) }
-          end
-          if depth < Limits::CAUSE_DEPTH && error.respond_to?(:cause) && error.cause && !error.cause.equal?(error)
-            cause = exception(error.cause, depth + 1)
-            shape["cause"] = cause if cause
-          end
+          shape = { 'type' => truncate(safe_string(error.class.name), Limits::EXCEPTION_TYPE_CHARS) }
+          shape['message'] = message(safe_string(error.message))
+          frames = backtrace_of(error)
+          shape['backtrace'] = frames if frames
+          cause = cause_of(error, depth)
+          shape['cause'] = cause if cause
           shape
-        rescue
-          {"type" => UNSERIALISABLE}
+        rescue StandardError
+          { 'type' => UNSERIALISABLE }
+        end
+
+        def backtrace_of(error)
+          frames = error.backtrace
+          return nil unless frames.is_a?(Array) && !frames.empty?
+
+          frames.first(Limits::BACKTRACE_FRAMES)
+                .map { |frame| truncate(safe_string(frame), Limits::BACKTRACE_FRAME_CHARS) }
+        end
+
+        def cause_of(error, depth)
+          return nil unless depth < Limits::CAUSE_DEPTH
+          return nil unless error.respond_to?(:cause)
+
+          cause = error.cause
+          return nil if cause.nil? || cause.equal?(error)
+
+          exception(cause, depth + 1)
         end
 
         def coerce(value, depth)
@@ -97,13 +112,17 @@ module Aiaiaiai
 
           kept = hash.to_a
           dropped = 0
-          while !kept.empty? && JSON.generate(kept.to_h.merge(DROPPED_KEYS => dropped + 1)).bytesize > budget
+          until kept.empty? || fits?(kept.to_h.merge(DROPPED_KEYS => dropped + 1), budget)
             kept.pop
             dropped += 1
           end
           kept.to_h.merge(DROPPED_KEYS => dropped)
         rescue JSON::GeneratorError, SystemStackError
-          {DROPPED_KEYS => hash.size}
+          { DROPPED_KEYS => hash.size }
+        end
+
+        def fits?(hash, budget)
+          JSON.generate(hash).bytesize <= budget
         end
 
         def truncate(string, limit)
@@ -114,8 +133,10 @@ module Aiaiaiai
 
         def safe_string(value)
           string = value.to_s
-          (string.encoding == Encoding::UTF_8 && string.valid_encoding?) ? string : string.scrub("?").encode("UTF-8")
-        rescue
+          return string if string.encoding == Encoding::UTF_8 && string.valid_encoding?
+
+          string.scrub('?').encode('UTF-8')
+        rescue StandardError
           UNSERIALISABLE
         end
       end

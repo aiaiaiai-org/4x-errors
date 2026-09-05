@@ -1,5 +1,7 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
+
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
 
 # Database credentials are server side only. No browser, and no Supabase
 # client role, ever reaches these tables.

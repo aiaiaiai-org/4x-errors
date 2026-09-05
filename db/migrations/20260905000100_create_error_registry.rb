@@ -1,5 +1,7 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
+
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
 
 # The curated side of the model: which failure kinds exist, which families
 # exist, and which failure belongs to which family right now.
@@ -30,7 +32,7 @@ Sequel.migration do
       DateTime :updated_at, null: false, default: Sequel::CURRENT_TIMESTAMP
 
       constraint(:error_definitions_severity_known) do
-        {default_severity: [nil, "debug", "info", "warning", "error", "critical"]}
+        { default_severity: [nil, 'debug', 'info', 'warning', 'error', 'critical'] }
       end
     end
 
@@ -39,24 +41,26 @@ Sequel.migration do
       foreign_key :error_id, :error_definitions, type: String, null: false, on_delete: :cascade
       foreign_key :family_id, :error_families, type: String, null: false, on_delete: :cascade
       BigDecimal :confidence, size: [4, 3], null: false, default: 1.0
-      column :evidence, "text[]", null: false
+      column :evidence, 'text[]', null: false
       # How the membership came to exist: reported by an SDK, asserted by a
       # human, or derived by a deterministic rule.
-      String :source, null: false, default: "reported"
+      String :source, null: false, default: 'reported'
       String :note, text: true
       DateTime :created_at, null: false, default: Sequel::CURRENT_TIMESTAMP
       DateTime :superseded_at
       String :superseded_reason, text: true
 
       constraint(:memberships_confidence_is_a_probability) { (confidence >= 0) & (confidence <= 1) }
-      constraint(:memberships_source_known) { {source: %w[reported curated rule]} }
-      constraint(:memberships_have_evidence, Sequel.lit("cardinality(evidence) > 0"))
+      constraint(:memberships_source_known) { { source: %w[reported curated rule] } }
+      constraint(:memberships_have_evidence, Sequel.lit('cardinality(evidence) > 0'))
     end
 
     # One active membership per (error, family). History stays queryable.
-    add_index :error_family_memberships, [:error_id, :family_id],
-      unique: true, where: {superseded_at: nil}, name: :error_family_memberships_active_uniq
-    add_index :error_family_memberships, [:family_id], where: {superseded_at: nil},
-      name: :error_family_memberships_active_family_idx
+    add_index :error_family_memberships, %i[error_id family_id],
+              unique: true, where: { superseded_at: nil },
+              name: :error_family_memberships_active_uniq
+    add_index :error_family_memberships, [:family_id],
+              where: { superseded_at: nil },
+              name: :error_family_memberships_active_family_idx
   end
 end

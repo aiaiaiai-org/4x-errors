@@ -1,0 +1,78 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+plugins:
+  - rubocop-rspec
+
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 4.0
+  SuggestExtensions: false
+  Exclude:
+    - 'vendor/**/*'
+
+Layout/LineLength:
+  Max: 100
+
+# Reporting and validation methods answer with a boolean as part of their
+# contract rather than because they ask a question. NullReporter#flush and the
+# checks in ProductionSmoke are interface methods, not predicates.
+Naming/PredicateMethod:
+  Enabled: false
+
+# On a Sequel dataset, `empty?` and `count` are SQL; the Enumerable methods
+# this cop suggests would load rows to answer the same question.
+Style/CollectionQuerying:
+  Exclude:
+    - 'lib/aiaiaiai/errors/collector/**/*'
+
+# Keyword arguments are named at the call site, so a long list of them does not
+# carry the risk this cop exists to prevent.
+Metrics/ParameterLists:
+  CountKeywordArgs: false
+
+Metrics/MethodLength:
+  Max: 20
+
+Metrics/AbcSize:
+  Max: 25
+
+Metrics/CyclomaticComplexity:
+  Max: 10
+
+Metrics/PerceivedComplexity:
+  Max: 10
+
+Metrics/ClassLength:
+  Max: 200
+
+Metrics/ModuleLength:
+  Max: 200
+
+# Migrations, tasks and specs are written as blocks by design.
+Metrics/BlockLength:
+  Exclude:
+    - 'db/migrations/*.rb'
+    - 'lib/tasks/*.rake'
+    - 'spec/**/*.rb'
+    - 'Rakefile'
+
+# An integration example asserts several facts about one outcome; splitting
+# them would repeat the setup rather than clarify the behaviour.
+RSpec/ExampleLength:
+  Max: 20
+
+RSpec/MultipleExpectations:
+  Max: 6
+
+# Several specs describe a contract, an endpoint or a repository invariant
+# rather than a class.
+RSpec/DescribeClass:
+  Enabled: false
+
+# The conformance run and the repository invariants build their examples from
+# data read at load time, which is what these locals are for.
+RSpec/LeakyLocalVariable:
+  Exclude:
+    - 'spec/aiaiaiai/errors/protocol/contract_spec.rb'
+    - 'spec/repository_spec.rb'

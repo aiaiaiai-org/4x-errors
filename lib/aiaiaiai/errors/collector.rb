@@ -1,13 +1,15 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
 
-require_relative "protocol"
-require_relative "protocol/validator"
-require_relative "collector/database"
-require_relative "collector/ingest"
-require_relative "collector/store"
-require_relative "collector/token_store"
-require_relative "collector/app"
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+require_relative 'protocol'
+require_relative 'protocol/validator'
+require_relative 'collector/database'
+require_relative 'collector/ingest'
+require_relative 'collector/store'
+require_relative 'collector/token_store'
+require_relative 'collector/app'
 
 module Aiaiaiai
   module Errors
@@ -28,8 +30,8 @@ module Aiaiaiai
       end
 
       def default_logger
-        require "logger"
-        Logger.new($stdout, level: ENV.fetch("LOG_LEVEL", "info"))
+        require 'logger'
+        Logger.new($stdout, level: ENV.fetch('LOG_LEVEL', 'info'))
       end
     end
   end

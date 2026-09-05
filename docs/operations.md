@@ -10,8 +10,8 @@ repository, and nothing is compiled into the image.
 | `DATABASE_URL` | yes | PostgreSQL connection URL. Server side only. TLS is forced for any non-local host. |
 | `ERRORS_INGEST_TOKENS` | yes | JSON object of `project` → array of SHA-256 token digests |
 | `DATABASE_MAX_CONNECTIONS` | no | connection pool size, default 8 |
-| `PORT` | no | listen port, default 8080 |
-| `WEB_CONCURRENCY` | no | Puma workers, default 2 |
+| `PORT` | no | listen port, default 9292 |
+| `WEB_CONCURRENCY` | no | Puma workers, default 0 (single mode) |
 | `PUMA_THREADS` | no | threads per worker, default 8 |
 | `LOG_LEVEL` | no | default `info` |
 
@@ -109,7 +109,7 @@ It applies pending migrations, verifies none remain, then runs
 It never resets the schema, never writes anything that does not name itself as
 a smoke record, and never deploys. The credentials it authenticates with are
 minted for the run and discarded with it. The check is exercised by
-`spec/collector/production_smoke_spec.rb`, so the run against the real database
+`spec/aiaiaiai/errors/collector/production_smoke_spec.rb`, so the run against the real database
 is not the first time that code has executed.
 
 Put required reviewers on the `production` environment so that a person

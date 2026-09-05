@@ -1,8 +1,10 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
 
-require "sequel"
-require "uri"
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+require 'sequel'
+require 'uri'
 
 module Aiaiaiai
   module Errors
@@ -13,16 +15,20 @@ module Aiaiaiai
       # echoed or included in an error message: everything that has to name the
       # database uses {redact}.
       module Database
-        MIGRATIONS_PATH = File.join(Protocol::ROOT, "db", "migrations")
+        MIGRATIONS_PATH = File.join(Protocol::ROOT, 'db', 'migrations')
         LOCAL_HOSTS = %w[localhost 127.0.0.1 ::1].freeze
 
-        Error = Class.new(StandardError)
-        NotConfigured = Class.new(Error)
+        class Error < StandardError
+        end
+
+        class NotConfigured < Error
+        end
 
         module_function
 
-        def connect(url = ENV["DATABASE_URL"], max_connections: Integer(ENV.fetch("DATABASE_MAX_CONNECTIONS", "8")))
-          raise NotConfigured, "DATABASE_URL is not set" if url.nil? || url.empty?
+        def connect(url = ENV.fetch('DATABASE_URL', nil),
+                    max_connections: Integer(ENV.fetch('DATABASE_MAX_CONNECTIONS', '8')))
+          raise NotConfigured, 'DATABASE_URL is not set' if url.nil? || url.empty?
 
           db = Sequel.connect(
             require_tls(url),
@@ -38,22 +44,22 @@ module Aiaiaiai
         # is corrected rather than trusted.
         def require_tls(url)
           uri = URI.parse(url)
-          return url if LOCAL_HOSTS.include?(uri.host) || uri.query.to_s.include?("sslmode=")
+          return url if LOCAL_HOSTS.include?(uri.host) || uri.query.to_s.include?('sslmode=')
 
-          uri.query = [uri.query, "sslmode=require"].compact.reject(&:empty?).join("&")
+          uri.query = [uri.query, 'sslmode=require'].compact.reject(&:empty?).join('&')
           uri.to_s
         rescue URI::InvalidURIError
           url
         end
 
         # A form of the URL that is safe to print.
-        def redact(url = ENV["DATABASE_URL"])
-          return "(unset)" if url.nil? || url.empty?
+        def redact(url = ENV.fetch('DATABASE_URL', nil))
+          return '(unset)' if url.nil? || url.empty?
 
           uri = URI.parse(url)
           "#{uri.scheme}://#{"#{uri.user}:***@" if uri.user}#{uri.host}:#{uri.port}#{uri.path}"
         rescue URI::InvalidURIError
-          "(unparseable)"
+          '(unparseable)'
         end
 
         def migrate(db, target: nil)
@@ -67,7 +73,7 @@ module Aiaiaiai
         end
 
         def reachable?(db)
-          db.fetch("SELECT 1 AS reachable").first[:reachable] == 1
+          db.fetch('SELECT 1 AS reachable').first[:reachable] == 1
         rescue Sequel::Error, StandardError
           false
         end

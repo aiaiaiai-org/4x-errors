@@ -1,10 +1,12 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
 
-require "json"
-require "securerandom"
-require "sequel"
-require "time"
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+require 'json'
+require 'securerandom'
+require 'sequel'
+require 'time'
 
 module Aiaiaiai
   module Errors
@@ -22,8 +24,8 @@ module Aiaiaiai
         BEARER = /\ABearer\s+(?<token>[^\s]+)\z/i
 
         Result = Struct.new(:status, :body) do
-          def to_json(*args)
-            JSON.generate(body, *args)
+          def to_json(*)
+            JSON.generate(body, *)
           end
         end
 
@@ -38,42 +40,52 @@ module Aiaiaiai
 
         def call(authorization:, raw_body:)
           project = tokens.authenticate(bearer_token(authorization))
-          return result(401, error: "unauthorized") if project.nil?
+          return result(401, error: 'unauthorized') if project.nil?
 
           payload = parse(raw_body)
-          return result(400, error: "malformed_json") if payload == :unparseable
+          return result(400, error: 'malformed_json') if payload == :unparseable
 
           violations = validator.validate(payload)
           unless violations.empty?
-            return result(400, error: "invalid_payload", protocol_version: Protocol::VERSION,
-              violations: violations.map { |violation| {pointer: violation.pointer, message: violation.message} })
+            return result(400, error: 'invalid_payload', protocol_version: Protocol::VERSION,
+                               violations: violations.map do |violation|
+                                 { pointer: violation.pointer, message: violation.message }
+                               end)
           end
 
-          return result(403, error: "project_mismatch") unless payload["project"] == project
+          return result(403, error: 'project_mismatch') unless payload['project'] == project
 
           persist(payload, project)
-        rescue Store::CycleRejected => error
-          result(409, error: "causal_cycle", message: error.message)
+        rescue Store::CycleRejected => e
+          result(409, error: 'causal_cycle', message: e.message)
         end
 
         private
 
         def persist(payload, project)
           received_at = clock.call
-          protocol_version = payload["protocol_version"]
+          protocol_version = payload['protocol_version']
 
-          events = payload["events"].map { |event| normalise_event(event, project, protocol_version, received_at) }
-          relations = Array(payload["relations"]).map { |relation| normalise_relation(relation, received_at) }
+          events = payload['events'].map do |event|
+            normalise_event(event, project, protocol_version, received_at)
+          end
+          relations = Array(payload['relations']).map do |relation|
+            normalise_relation(relation, received_at)
+          end
 
-          recorded = store.record(events: events, relations: relations, received_at: received_at)
+          accepted(store.record(events: events, relations: relations, received_at: received_at))
+        end
 
+        def accepted(recorded)
           result(202,
-            accepted: recorded[:events].length,
-            events: recorded[:events].map { |event| {event_id: event[:event_id], duplicate: event[:duplicate]} },
-            relations: {
-              stored: recorded[:relations].count { |relation| relation[:stored] },
-              already_known: recorded[:relations].count { |relation| !relation[:stored] }
-            })
+                 accepted: recorded[:events].length,
+                 events: recorded[:events].map do |event|
+                   { event_id: event[:event_id], duplicate: event[:duplicate] }
+                 end,
+                 relations: {
+                   stored: recorded[:relations].count { |relation| relation[:stored] },
+                   already_known: recorded[:relations].count { |relation| !relation[:stored] }
+                 })
         end
 
         # Secrets are removed before anything else is derived from the payload,
@@ -84,33 +96,33 @@ module Aiaiaiai
           {
             id: SecureRandom.uuid_v7,
             protocol_version: protocol_version,
-            error_id: clean["error_id"],
-            reported_family_id: clean["family_id"],
+            error_id: clean['error_id'],
+            reported_family_id: clean['family_id'],
             project: project,
-            component: clean["component"],
-            environment: clean["environment"],
-            severity: clean["severity"] || Protocol::Vocabulary::DEFAULT_SEVERITY,
-            message: clean["message"],
-            exception: json_or_nil(clean["exception"]),
+            component: clean['component'],
+            environment: clean['environment'],
+            severity: clean['severity'] || Protocol::Vocabulary::DEFAULT_SEVERITY,
+            message: clean['message'],
+            exception: json_or_nil(clean['exception']),
             fingerprint: Protocol::Fingerprint.for(clean),
-            context: Sequel.pg_jsonb(clean["context"] || {}),
-            tags: Sequel.pg_jsonb(clean["tags"] || {}),
-            observed_at: parse_time(clean["observed_at"]) || received_at,
-            occurrence_key: clean["occurrence_key"],
-            sdk: json_or_nil(clean["sdk"]),
-            local_ref: clean["local_ref"]
+            context: Sequel.pg_jsonb(clean['context'] || {}),
+            tags: Sequel.pg_jsonb(clean['tags'] || {}),
+            observed_at: parse_time(clean['observed_at']) || received_at,
+            occurrence_key: clean['occurrence_key'],
+            sdk: json_or_nil(clean['sdk']),
+            local_ref: clean['local_ref']
           }
         end
 
         def normalise_relation(relation, received_at)
           {
-            source: symbolise_endpoint(relation["source"]),
-            target: symbolise_endpoint(relation["target"]),
-            type: relation["type"],
-            confidence: relation["confidence"],
-            evidence: relation["evidence"],
-            note: relation["note"],
-            created_by: "reporter",
+            source: symbolise_endpoint(relation['source']),
+            target: symbolise_endpoint(relation['target']),
+            type: relation['type'],
+            confidence: relation['confidence'],
+            evidence: relation['evidence'],
+            note: relation['note'],
+            created_by: 'reporter',
             created_at: received_at
           }
         end

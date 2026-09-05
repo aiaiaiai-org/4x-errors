@@ -1,5 +1,7 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
+
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
 
 module Aiaiaiai
   module Errors
@@ -9,7 +11,9 @@ module Aiaiaiai
     # abandoned outright until a cooldown has passed. One trial delivery then
     # decides whether to close it again.
     class CircuitBreaker
-      def initialize(threshold:, reset_after:, clock: -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) })
+      def initialize(threshold:, reset_after:, clock: lambda {
+        Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      })
         @threshold = threshold
         @reset_after = reset_after
         @clock = clock
@@ -19,13 +23,13 @@ module Aiaiaiai
       end
 
       def allow?
-        @mutex.synchronize { state == :closed || state == :half_open }
+        @mutex.synchronize { %i[closed half_open].include?(state) }
       end
 
       def state
         return :closed if @opened_at.nil?
 
-        (@clock.call - @opened_at >= @reset_after) ? :half_open : :open
+        @clock.call - @opened_at >= @reset_after ? :half_open : :open
       end
 
       def record_success

@@ -1,5 +1,7 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
+
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
 
 module Aiaiaiai
   module Errors
@@ -12,13 +14,13 @@ module Aiaiaiai
 
       def relate(_relation) = false
 
-      def flush(timeout: nil) = true
+      def flush(**) = true
 
-      def shutdown(timeout: nil) = true
+      def shutdown(**) = true
 
       def null? = true
 
-      def statistics = {queued: 0, dropped: 0, circuit: :closed, null: true}
+      def statistics = { queued: 0, dropped: 0, circuit: :closed, null: true }
     end
   end
 end

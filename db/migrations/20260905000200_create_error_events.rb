@@ -1,5 +1,7 @@
-# © 2026 aiaiaiai · aiaiaiai.org
 # frozen_string_literal: true
+
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
 
 # Raw occurrences: the ground truth of the system.
 #
@@ -28,18 +30,19 @@ Sequel.migration do
       jsonb :sdk
 
       constraint(:error_events_severity_known) do
-        {severity: %w[debug info warning error critical]}
+        { severity: %w[debug info warning error critical] }
       end
     end
 
     # Idempotency: a reporter that retries the same occurrence stores it once.
-    add_index :error_events, [:project, :occurrence_key],
-      unique: true, where: Sequel.~(occurrence_key: nil), name: :error_events_occurrence_uniq
-    add_index :error_events, [:error_id, :received_at], name: :error_events_error_id_idx
-    add_index :error_events, [:project, :environment, :received_at], name: :error_events_project_idx
-    add_index :error_events, [:fingerprint, :received_at], name: :error_events_fingerprint_idx
+    add_index :error_events, %i[project occurrence_key],
+              unique: true, where: Sequel.~(occurrence_key: nil),
+              name: :error_events_occurrence_uniq
+    add_index :error_events, %i[error_id received_at], name: :error_events_error_id_idx
+    add_index :error_events, %i[project environment received_at], name: :error_events_project_idx
+    add_index :error_events, %i[fingerprint received_at], name: :error_events_fingerprint_idx
     add_index :error_events, [:reported_family_id], where: Sequel.~(reported_family_id: nil),
-      name: :error_events_reported_family_idx
+                                                    name: :error_events_reported_family_idx
 
     run <<~SQL
       CREATE OR REPLACE FUNCTION error_events_are_immutable() RETURNS trigger AS $$
