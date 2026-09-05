@@ -21,6 +21,8 @@ export function createIndexedDbQueue(options = {}) {
 }
 
 class IndexedDbEventQueue {
+  available = true;
+
   #factory;
   #databaseName;
   #maxEntries;
@@ -82,6 +84,7 @@ class IndexedDbEventQueue {
 
 function createUnavailableQueue() {
   return {
+    available: false,
     enqueue: async () => undefined,
     peek: async () => [],
     remove: async () => undefined,

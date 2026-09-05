@@ -1,6 +1,9 @@
 // © 2026 aiaiaiai · aiaiaiai.org
 // Repository license is not selected yet; no SPDX identifier is asserted here.
 
+import { createBrowserHttpTransport } from './http_transport.js';
+import { createIndexedDbQueue } from './indexeddb_queue.js';
+import { createQueuedDelivery } from './queued_delivery.js';
 import { sanitizeContext } from './sanitize.js';
 
 const PROTOCOL_VERSION = 'errors.v1';
@@ -10,14 +13,20 @@ export function createBrowserReporter(config = {}) {
   const normalized = normalizeConfig(config);
   if (!normalized) return createNoopReporter();
 
+  const delivery = createDelivery(normalized);
+  if (!delivery) return createNoopReporter();
+
   return {
     report(input) {
       try {
         const event = buildEvent(normalized, input);
-        void Promise.resolve(normalized.transport(event)).catch(() => undefined);
+        void delivery.submit(event);
       } catch {
         // Reporting is deliberately non-critical and must never escape into the host.
       }
+    },
+    flush() {
+      return delivery.flush();
     }
   };
 }
@@ -25,19 +34,57 @@ export function createBrowserReporter(config = {}) {
 function normalizeConfig(config) {
   if (!config || typeof config !== 'object') return null;
   if (!nonEmptyString(config.project) || !nonEmptyString(config.source)) return null;
-  if (typeof config.transport !== 'function') return null;
+
+  const collectorEndpoint = nonEmptyString(config.collectorEndpoint)
+    ? config.collectorEndpoint
+    : null;
+  const transport = typeof config.transport === 'function' ? config.transport : null;
+  if (!collectorEndpoint && !transport) return null;
 
   return {
     project: config.project,
     source: config.source,
-    transport: config.transport,
+    collectorEndpoint,
+    transport,
     now: typeof config.now === 'function' ? config.now : () => new Date(),
     randomUUID: typeof config.randomUUID === 'function' ? config.randomUUID : defaultRandomUUID
   };
 }
 
+function createDelivery(config) {
+  if (config.transport) return createInjectedDelivery(config.transport);
+
+  const send = createBrowserHttpTransport({ collectorEndpoint: config.collectorEndpoint });
+  if (!send) return null;
+
+  const queue = createIndexedDbQueue({
+    databaseName: queueDatabaseName(config.project, config.collectorEndpoint)
+  });
+  return createQueuedDelivery({ queue, send });
+}
+
+function createInjectedDelivery(transport) {
+  return {
+    async submit(event) {
+      try {
+        await transport(event);
+      } catch {
+        // Custom transports preserve the same fail-safe host boundary.
+      }
+    },
+    async flush() {}
+  };
+}
+
 function createNoopReporter() {
-  return { report() {} };
+  return {
+    report() {},
+    async flush() {}
+  };
+}
+
+function queueDatabaseName(project, collectorEndpoint) {
+  return `4x-errors:${project}:${collectorEndpoint}`;
 }
 
 function buildEvent(config, input) {
