@@ -7,9 +7,10 @@ export interface BrowserReporterConfig {
   collectorEndpoint?: string;
   transport?: (event: ErrorEventV1) => void | Promise<void>;
   runtimeTarget?: {
-    addEventListener(type: string, listener: () => void): void;
-    removeEventListener?(type: string, listener: () => void): void;
+    addEventListener(type: string, listener: (...args: unknown[]) => void): void;
+    removeEventListener?(type: string, listener: (...args: unknown[]) => void): void;
   };
+  captureGlobalErrors?: boolean;
   now?: () => Date;
   randomUUID?: () => string;
 }

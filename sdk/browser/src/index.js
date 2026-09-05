@@ -2,6 +2,7 @@
 // Repository license is not selected yet; no SPDX identifier is asserted here.
 
 import { createEventDeduplicator } from './deduplicator.js';
+import { attachGlobalErrorCapture } from './global_capture.js';
 import { createBrowserHttpTransport } from './http_transport.js';
 import { createIndexedDbQueue } from './indexeddb_queue.js';
 import { createQueuedDelivery } from './queued_delivery.js';
@@ -27,7 +28,7 @@ export function createBrowserReporter(config = {}) {
   const deduplicator = createEventDeduplicator();
   const detachRecovery = attachDeliveryRecovery({ delivery, target: normalized.runtimeTarget });
 
-  return {
+  const reporter = {
     report(input) {
       try {
         const event = buildEvent(normalized, input);
@@ -41,9 +42,15 @@ export function createBrowserReporter(config = {}) {
       return delivery.flush();
     },
     dispose() {
+      detachGlobalCapture();
       detachRecovery();
     }
   };
+
+  const detachGlobalCapture = normalized.captureGlobalErrors
+    ? attachGlobalErrorCapture({ reporter, target: normalized.runtimeTarget })
+    : () => {};
+  return reporter;
 }
 
 function normalizeConfig(config) {
@@ -63,6 +70,7 @@ function normalizeConfig(config) {
     collectorEndpoint,
     transport,
     runtimeTarget: config.runtimeTarget ?? globalThis,
+    captureGlobalErrors: config.captureGlobalErrors !== false,
     now: typeof config.now === 'function' ? config.now : () => new Date(),
     randomUUID: typeof config.randomUUID === 'function' ? config.randomUUID : defaultRandomUUID
   };
