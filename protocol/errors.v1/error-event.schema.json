@@ -28,7 +28,7 @@
     },
     "error_id": {
       "type": "string",
-      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)+$",
+      "pattern": "^[a-z0-9]+(?:\\.[a-z0-9]+)+$",
       "maxLength": 255
     },
     "project": {
@@ -43,7 +43,7 @@
     },
     "severity": {
       "type": "string",
-      "enum": ["debug", "info", "warning", "error", "critical"]
+      "minLength": 1
     },
     "message": {
       "type": "string",
@@ -73,7 +73,7 @@
     },
     "family_id": {
       "type": ["string", "null"],
-      "pattern": "^family\\.[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "pattern": "^family\\.[a-z0-9]+(?:\\.[a-z0-9]+)+$",
       "maxLength": 255
     },
     "caused_by_event_id": {
