@@ -18,6 +18,7 @@ RSpec.describe Aiaiaiai::Errors::App do
   let(:event_store) { instance_double(Aiaiaiai::Errors::EventStore) }
 
   before do
+    allow(event_store).to receive(:insert)
     described_class.event_store = event_store
   end
 
