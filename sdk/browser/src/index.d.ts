@@ -1,0 +1,45 @@
+// © 2026 aiaiaiai · aiaiaiai.org
+// Repository license is not selected yet; no SPDX identifier is asserted here.
+
+export interface BrowserReporterConfig {
+  project: string;
+  source: string;
+  transport: (event: ErrorEventV1) => void | Promise<void>;
+  now?: () => Date;
+  randomUUID?: () => string;
+}
+
+export interface ErrorReportInput {
+  errorId: string;
+  severity?: string;
+  message?: string;
+  fullText?: string;
+  context?: Record<string, unknown>;
+  tags?: string[];
+  familyId?: string | null;
+  causedByEventId?: string | null;
+  correlationId?: string | null;
+}
+
+export interface ErrorEventV1 {
+  protocol_version: 'errors.v1';
+  event_id: string;
+  error_id: string;
+  project: string;
+  source: string;
+  severity: string;
+  message: string;
+  full_text: string;
+  observed_at: string;
+  context: Record<string, unknown>;
+  tags: string[];
+  family_id: string | null;
+  caused_by_event_id: string | null;
+  correlation_id: string | null;
+}
+
+export interface BrowserReporter {
+  report(input: ErrorReportInput): void;
+}
+
+export function createBrowserReporter(config?: Partial<BrowserReporterConfig>): BrowserReporter;

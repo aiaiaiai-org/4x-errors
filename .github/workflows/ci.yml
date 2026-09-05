@@ -44,6 +44,22 @@ jobs:
       - name: Run tests
         run: bundle exec rspec
 
+  browser-sdk:
+    name: Browser SDK correctness
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/browser
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Run browser SDK tests
+        run: npm test
+      - name: Verify package can be packed
+        run: npm pack --dry-run
+
   docker:
     name: Container build
     runs-on: ubuntu-latest
