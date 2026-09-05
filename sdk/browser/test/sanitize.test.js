@@ -11,6 +11,8 @@ test('redacts sensitive context keys recursively', () => {
     nested: {
       Authorization: 'Bearer token',
       api_key: 'abc',
+      access_token: 'access',
+      tokenizer: 'model component',
       safe: 'visible'
     }
   });
@@ -20,6 +22,8 @@ test('redacts sensitive context keys recursively', () => {
     nested: {
       Authorization: '[REDACTED]',
       api_key: '[REDACTED]',
+      access_token: '[REDACTED]',
+      tokenizer: 'model component',
       safe: 'visible'
     }
   });
