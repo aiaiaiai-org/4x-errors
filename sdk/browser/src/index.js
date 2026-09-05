@@ -10,7 +10,7 @@ import { sanitizeContext } from './sanitize.js';
 const PROTOCOL_VERSION = 'errors.v1';
 const ERROR_ID = /^[a-z0-9]+(?:\.[a-z0-9]+)+$/;
 const FAMILY_ID = /^family\.[a-z0-9]+(?:\.[a-z0-9]+)+$/;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const IDENTIFIER_MAX_LENGTH = 255;
 const MESSAGE_MAX_LENGTH = 4_096;
 const FULL_TEXT_MAX_LENGTH = 32_768;
