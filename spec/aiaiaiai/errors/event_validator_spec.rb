@@ -19,6 +19,13 @@ RSpec.describe Aiaiaiai::Errors::EventValidator do
     expect(validator.validate(event)).to be_empty
   end
 
+  it 'accepts a modern UUID and schema-allowed empty full text' do
+    event['event_id'] = '0199f18c-6f41-7b34-8d7a-e90bd09cb3a2'
+    event['full_text'] = ''
+
+    expect(validator.validate(event)).to be_empty
+  end
+
   it 'rejects unknown top-level fields' do
     event['unexpected'] = true
 
@@ -38,11 +45,24 @@ RSpec.describe Aiaiaiai::Errors::EventValidator do
     expect(errors).to include('tags exceeds 32 items', 'tags must contain strings only')
   end
 
+  it 'enforces tag uniqueness and string constraints' do
+    event['tags'] = ['duplicate', 'duplicate', '']
+    errors = validator.validate(event)
+
+    expect(errors).to include('tags must be unique', 'tags must not contain empty strings')
+  end
+
   it 'rejects malformed semantic identifiers' do
     event['error_id'] = 'AI MODEL FAILED'
     event['family_id'] = 'model.availability'
     errors = validator.validate(event)
 
     expect(errors).to include('error_id has invalid format', 'family_id has invalid format')
+  end
+
+  it 'rejects malformed observed timestamps' do
+    event['observed_at'] = 'not-a-date'
+
+    expect(validator.validate(event)).to include('observed_at must be a valid date-time')
   end
 end
