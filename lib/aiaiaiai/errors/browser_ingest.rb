@@ -19,6 +19,7 @@ module Aiaiaiai
           validate_event(request, event)
           authorize_browser_project(request, event, origin)
         end
+        rate_limit_browser_events!(request, events, origin)
         persist_browser_events(events, batch: payload.is_a?(Array))
       end
 
@@ -55,8 +56,24 @@ module Aiaiaiai
         request.halt json_error(403, 'project_origin_not_allowed') unless allowed
       end
 
+      def rate_limit_browser_events!(request, events, origin)
+        events.group_by { |event| event.fetch('project') }.each do |project, project_events|
+          key = [project, origin, browser_remote_address(request)].join('|')
+          result = self.class.browser_rate_limiter.consume(key, cost: project_events.length)
+          next if result.allowed
+
+          response['Retry-After'] = result.retry_after.to_s
+          request.halt json_error(429, 'rate_limited')
+        end
+      end
+
+      def browser_remote_address(request)
+        address = request.env['REMOTE_ADDR']
+        address.is_a?(String) && !address.empty? ? address : 'unknown'
+      end
+
       def browser_collector_configured?
-        self.class.event_store && self.class.browser_policy&.configured?
+        self.class.event_store && self.class.browser_policy&.configured? && self.class.browser_rate_limiter
       end
 
       def ensure_browser_configured!(request)
