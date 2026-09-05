@@ -7,14 +7,19 @@ module Aiaiaiai
   module Errors
     # HTTP behavior for the zero-secret, untrusted browser ingest boundary.
     module BrowserIngest
+      MAX_BROWSER_BATCH_SIZE = 50
+
       def ingest_browser_event(request)
         ensure_browser_configured!(request)
         origin = require_browser_origin!(request)
         apply_browser_cors(origin)
-        event = parse_json(request, read_event_body(request))
-        validate_event(request, event)
-        authorize_browser_project(request, event, origin)
-        persist_event(event)
+        payload = parse_json(request, read_event_body(request))
+        events = normalize_browser_events(request, payload)
+        events.each do |event|
+          validate_event(request, event)
+          authorize_browser_project(request, event, origin)
+        end
+        persist_browser_events(events, batch: payload.is_a?(Array))
       end
 
       def browser_preflight(request)
@@ -27,6 +32,21 @@ module Aiaiaiai
       end
 
       private
+
+      def normalize_browser_events(request, payload)
+        return [payload] unless payload.is_a?(Array)
+
+        request.halt json_error(422, 'invalid_batch') if payload.empty? || payload.length > MAX_BROWSER_BATCH_SIZE
+        payload
+      end
+
+      def persist_browser_events(events, batch:)
+        return persist_event(events.fetch(0)) unless batch
+
+        event_ids = self.class.event_store.insert_batch(events)
+        response.status = 201
+        { event_ids: event_ids }
+      end
 
       def authorize_browser_project(request, event, origin)
         project = event.is_a?(Hash) ? event['project'] : nil
