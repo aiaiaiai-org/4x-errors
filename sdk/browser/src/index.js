@@ -5,6 +5,8 @@ import { createEventDeduplicator } from './deduplicator.js';
 import { attachGlobalErrorCapture } from './global_capture.js';
 import { createBrowserHttpTransport } from './http_transport.js';
 import { createIndexedDbQueue } from './indexeddb_queue.js';
+import { attachLifecycleDelivery } from './lifecycle.js';
+import { createBrowserLifecycleTransport } from './lifecycle_transport.js';
 import { createQueuedDelivery } from './queued_delivery.js';
 import { attachDeliveryRecovery } from './recovery.js';
 import { sanitizeContext } from './sanitize.js';
@@ -27,6 +29,14 @@ export function createBrowserReporter(config = {}) {
   if (!delivery) return createNoopReporter();
   const deduplicator = createEventDeduplicator();
   const detachRecovery = attachDeliveryRecovery({ delivery, target: normalized.runtimeTarget });
+  const sendLifecycle = normalized.collectorEndpoint
+    ? createBrowserLifecycleTransport({ collectorEndpoint: normalized.collectorEndpoint })
+    : null;
+  const detachLifecycle = attachLifecycleDelivery({
+    delivery,
+    sendLifecycle,
+    target: normalized.runtimeTarget
+  });
 
   const reporter = {
     report(input) {
@@ -43,6 +53,7 @@ export function createBrowserReporter(config = {}) {
     },
     dispose() {
       detachGlobalCapture();
+      detachLifecycle();
       detachRecovery();
     }
   };
@@ -97,7 +108,8 @@ function createInjectedDelivery(transport) {
         // Custom transports preserve the same fail-safe host boundary.
       }
     },
-    async flush() {}
+    async flush() {},
+    async lifecycleFlush() {}
   };
 }
 
