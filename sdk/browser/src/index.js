@@ -5,6 +5,7 @@ import { createEventDeduplicator } from './deduplicator.js';
 import { createBrowserHttpTransport } from './http_transport.js';
 import { createIndexedDbQueue } from './indexeddb_queue.js';
 import { createQueuedDelivery } from './queued_delivery.js';
+import { attachDeliveryRecovery } from './recovery.js';
 import { sanitizeContext } from './sanitize.js';
 
 const PROTOCOL_VERSION = 'errors.v1';
@@ -17,6 +18,7 @@ export function createBrowserReporter(config = {}) {
   const delivery = createDelivery(normalized);
   if (!delivery) return createNoopReporter();
   const deduplicator = createEventDeduplicator();
+  const detachRecovery = attachDeliveryRecovery({ delivery, target: normalized.runtimeTarget });
 
   return {
     report(input) {
@@ -30,6 +32,9 @@ export function createBrowserReporter(config = {}) {
     },
     flush() {
       return delivery.flush();
+    },
+    dispose() {
+      detachRecovery();
     }
   };
 }
@@ -49,6 +54,7 @@ function normalizeConfig(config) {
     source: config.source,
     collectorEndpoint,
     transport,
+    runtimeTarget: config.runtimeTarget ?? globalThis,
     now: typeof config.now === 'function' ? config.now : () => new Date(),
     randomUUID: typeof config.randomUUID === 'function' ? config.randomUUID : defaultRandomUUID
   };
@@ -82,7 +88,8 @@ function createInjectedDelivery(transport) {
 function createNoopReporter() {
   return {
     report() {},
-    async flush() {}
+    async flush() {},
+    dispose() {}
   };
 }
 
