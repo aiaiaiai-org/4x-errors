@@ -1,6 +1,7 @@
 // © 2026 aiaiaiai · aiaiaiai.org
 // Repository license is not selected yet; no SPDX identifier is asserted here.
 
+import { createEventDeduplicator } from './deduplicator.js';
 import { createBrowserHttpTransport } from './http_transport.js';
 import { createIndexedDbQueue } from './indexeddb_queue.js';
 import { createQueuedDelivery } from './queued_delivery.js';
@@ -15,11 +16,13 @@ export function createBrowserReporter(config = {}) {
 
   const delivery = createDelivery(normalized);
   if (!delivery) return createNoopReporter();
+  const deduplicator = createEventDeduplicator();
 
   return {
     report(input) {
       try {
         const event = buildEvent(normalized, input);
+        if (!deduplicator.accept(event)) return;
         void delivery.submit(event);
       } catch {
         // Reporting is deliberately non-critical and must never escape into the host.
