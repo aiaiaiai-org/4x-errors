@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiaiaiai.org/4x-errors/errors.v1/error-event.schema.json",
+  "$comment": "© 2026 aiaiaiai · aiaiaiai.org",
+  "title": "4x-errors errors.v1 error event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol_version",
+    "event_id",
+    "error_id",
+    "project",
+    "source",
+    "severity",
+    "message",
+    "full_text",
+    "observed_at",
+    "context",
+    "tags"
+  ],
+  "properties": {
+    "protocol_version": {
+      "const": "errors.v1"
+    },
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "error_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)+$",
+      "maxLength": 255
+    },
+    "project": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["debug", "info", "warning", "error", "critical"]
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "full_text": {
+      "type": "string",
+      "maxLength": 32768
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "context": {
+      "type": "object"
+    },
+    "tags": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 255
+      }
+    },
+    "family_id": {
+      "type": ["string", "null"],
+      "pattern": "^family\\.[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "maxLength": 255
+    },
+    "caused_by_event_id": {
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "correlation_id": {
+      "type": ["string", "null"],
+      "maxLength": 255
+    }
+  }
+}
