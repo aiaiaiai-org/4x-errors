@@ -12,5 +12,9 @@ AllCops:
 Layout/LineLength:
   Max: 100
 
+RSpec/DescribeClass:
+  Exclude:
+    - 'spec/protocol/**/*_spec.rb'
+
 RSpec/MultipleExpectations:
   Max: 3
