@@ -58,7 +58,9 @@ module Aiaiaiai
 
       def normalize_origin(origin)
         uri = parse_origin(origin)
-        raise ArgumentError, 'browser ingest origin must be an HTTP(S) origin' unless valid_origin?(uri)
+        unless valid_origin?(uri)
+          raise ArgumentError, 'browser ingest origin must be an HTTP(S) origin'
+        end
 
         "#{uri.scheme}://#{origin_authority(uri)}"
       end
