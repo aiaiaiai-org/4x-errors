@@ -76,6 +76,10 @@ module Aiaiaiai
         return if field_value.nil? && OPTIONAL_FIELDS.include?(field)
         return errors << "#{field} must be a string" unless field_value.is_a?(String)
 
+        validate_string_bounds(field_value, field, minimum, maximum, errors)
+      end
+
+      def validate_string_bounds(field_value, field, minimum, maximum, errors)
         errors << "#{field} must not be empty" if minimum.positive? && field_value.empty?
         errors << "#{field} exceeds #{maximum} characters" if field_value.length > maximum
       end
