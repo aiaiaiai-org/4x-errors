@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "description": "Fail-safe browser reporter for the 4x-errors protocol.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aiaiaiai-org/4x-errors.git",
+    "directory": "sdk/browser"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
