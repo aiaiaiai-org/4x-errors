@@ -1,5 +1,5 @@
 // © 2026 aiaiaiai · aiaiaiai.org
-// Repository license is not selected yet; no SPDX identifier is asserted here.
+// SPDX-License-Identifier: Apache-2.0
 
 export function attachDeliveryRecovery({ delivery, target = globalThis }) {
   if (!delivery || typeof delivery.flush !== 'function') return () => {};
