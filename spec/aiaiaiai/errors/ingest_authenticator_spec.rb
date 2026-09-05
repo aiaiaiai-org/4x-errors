@@ -34,11 +34,14 @@ RSpec.describe Aiaiaiai::Errors::IngestAuthenticator do
 
   it 'loads digest configuration from JSON' do
     json = JSON.generate('nilx-one/web' => digest)
+    configured = described_class.from_json(json)
 
-    expect(described_class.from_json(json).authenticated?("Bearer #{token}", 'nilx-one/web')).to be(true)
+    expect(configured.authenticated?("Bearer #{token}", 'nilx-one/web')).to be(true)
   end
 
   it 'rejects malformed digest configuration' do
-    expect { described_class.new('nilx-one/web' => 'plaintext-token') }.to raise_error(ArgumentError)
+    invalid_configuration = { 'nilx-one/web' => 'plaintext-token' }
+
+    expect { described_class.new(invalid_configuration) }.to raise_error(ArgumentError)
   end
 end
