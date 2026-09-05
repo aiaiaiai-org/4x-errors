@@ -9,6 +9,13 @@ import { sanitizeContext } from './sanitize.js';
 
 const PROTOCOL_VERSION = 'errors.v1';
 const ERROR_ID = /^[a-z0-9]+(?:\.[a-z0-9]+)+$/;
+const FAMILY_ID = /^family\.[a-z0-9]+(?:\.[a-z0-9]+)+$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const IDENTIFIER_MAX_LENGTH = 255;
+const MESSAGE_MAX_LENGTH = 4_096;
+const FULL_TEXT_MAX_LENGTH = 32_768;
+const TAGS_MAX_ITEMS = 32;
+const REQUEST_MAX_BYTES = 512 * 1024;
 
 export function createBrowserReporter(config = {}) {
   const normalized = normalizeConfig(config);
@@ -36,7 +43,8 @@ export function createBrowserReporter(config = {}) {
 
 function normalizeConfig(config) {
   if (!config || typeof config !== 'object') return null;
-  if (!nonEmptyString(config.project) || !nonEmptyString(config.source)) return null;
+  if (!boundedNonEmptyString(config.project, IDENTIFIER_MAX_LENGTH)) return null;
+  if (!boundedNonEmptyString(config.source, IDENTIFIER_MAX_LENGTH)) return null;
 
   const collectorEndpoint = nonEmptyString(config.collectorEndpoint)
     ? config.collectorEndpoint
@@ -92,7 +100,7 @@ function queueDatabaseName(project, collectorEndpoint) {
 
 function buildEvent(config, input) {
   if (!input || typeof input !== 'object') throw new TypeError('error report must be an object');
-  if (!nonEmptyString(input.errorId) || !ERROR_ID.test(input.errorId)) {
+  if (!boundedNonEmptyString(input.errorId, IDENTIFIER_MAX_LENGTH) || !ERROR_ID.test(input.errorId)) {
     throw new TypeError('errorId must be a semantic error identifier');
   }
 
@@ -101,22 +109,67 @@ function buildEvent(config, input) {
     throw new TypeError('now must return a valid Date');
   }
 
-  return {
+  const eventId = config.randomUUID();
+  if (!UUID.test(eventId)) throw new TypeError('randomUUID must return a UUID');
+
+  const event = {
     protocol_version: PROTOCOL_VERSION,
-    event_id: config.randomUUID(),
+    event_id: eventId,
     error_id: input.errorId,
     project: config.project,
     source: config.source,
     severity: stringOr(input.severity, 'error'),
-    message: stringOr(input.message, input.errorId),
-    full_text: stringOr(input.fullText, stringOr(input.message, input.errorId)),
+    message: boundedString(stringOr(input.message, input.errorId), MESSAGE_MAX_LENGTH),
+    full_text: boundedString(
+      stringOr(input.fullText, stringOr(input.message, input.errorId)),
+      FULL_TEXT_MAX_LENGTH
+    ),
     observed_at: observedAt.toISOString(),
     context: sanitizeContext(input.context),
-    tags: stringArrayOrEmpty(input.tags),
-    family_id: nullableString(input.familyId),
-    caused_by_event_id: nullableString(input.causedByEventId),
-    correlation_id: nullableString(input.correlationId)
+    tags: normalizedTags(input.tags),
+    family_id: optionalIdentifier(input.familyId, FAMILY_ID),
+    caused_by_event_id: optionalUuid(input.causedByEventId),
+    correlation_id: optionalBoundedString(input.correlationId)
   };
+
+  if (serializedRequestBytes(event) > REQUEST_MAX_BYTES) {
+    throw new RangeError('error event exceeds browser request bound');
+  }
+  return event;
+}
+
+function normalizedTags(value) {
+  if (!Array.isArray(value)) return [];
+  const tags = value
+    .filter(nonEmptyString)
+    .map((tag) => boundedString(tag, IDENTIFIER_MAX_LENGTH));
+  return [...new Set(tags)].slice(0, TAGS_MAX_ITEMS);
+}
+
+function optionalIdentifier(value, pattern) {
+  if (value === undefined || value === null || value === '') return null;
+  if (!boundedNonEmptyString(value, IDENTIFIER_MAX_LENGTH) || !pattern.test(value)) {
+    throw new TypeError('optional identifier is invalid');
+  }
+  return value;
+}
+
+function optionalUuid(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string' || !UUID.test(value)) throw new TypeError('optional UUID is invalid');
+  return value;
+}
+
+function optionalBoundedString(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (!boundedNonEmptyString(value, IDENTIFIER_MAX_LENGTH)) {
+    throw new TypeError('optional string exceeds protocol bound');
+  }
+  return value;
+}
+
+function serializedRequestBytes(event) {
+  return new TextEncoder().encode(JSON.stringify([event])).byteLength;
 }
 
 function defaultRandomUUID() {
@@ -128,14 +181,14 @@ function nonEmptyString(value) {
   return typeof value === 'string' && value.length > 0;
 }
 
+function boundedNonEmptyString(value, maxLength) {
+  return nonEmptyString(value) && value.length <= maxLength;
+}
+
+function boundedString(value, maxLength) {
+  return value.length <= maxLength ? value : value.slice(0, maxLength);
+}
+
 function stringOr(value, fallback) {
   return nonEmptyString(value) ? value : fallback;
-}
-
-function nullableString(value) {
-  return nonEmptyString(value) ? value : null;
-}
-
-function stringArrayOrEmpty(value) {
-  return Array.isArray(value) ? value.filter((item) => typeof item === 'string') : [];
 }
