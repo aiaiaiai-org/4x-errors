@@ -120,7 +120,7 @@ test('keeps unavailable IndexedDB fallback one-shot and single-event', async () 
   assert.deepEqual(payloads, [value]);
 });
 
-test('limits one network batch to 50 events', async () => {
+test('drains more than 50 queued events through bounded network batches', async () => {
   const durableQueue = queue('delivery-count-limit');
   const events = Array.from({ length: 51 }, (_, index) => event(`event-${index}`));
   for (const value of events) await durableQueue.enqueue(value);
@@ -135,11 +135,11 @@ test('limits one network batch to 50 events', async () => {
 
   await delivery.flush();
 
-  assert.equal(payloads[0].length, 50);
-  assert.deepEqual(await durableQueue.peek(), [events[50]]);
+  assert.deepEqual(payloads.map((payload) => payload.length), [50, 1]);
+  assert.equal(await durableQueue.size(), 0);
 });
 
-test('splits a batch before the configured serialized byte limit', async () => {
+test('drains byte-limited events as multiple bounded batches', async () => {
   const durableQueue = queue('delivery-byte-limit');
   const first = event('77777777-7777-4777-8777-777777777777', { full_text: 'a'.repeat(400) });
   const second = event('88888888-8888-4888-8888-888888888888', { full_text: 'b'.repeat(400) });
@@ -158,6 +158,6 @@ test('splits a batch before the configured serialized byte limit', async () => {
 
   await delivery.flush();
 
-  assert.deepEqual(payloads, [[first]]);
-  assert.deepEqual(await durableQueue.peek(), [second]);
+  assert.deepEqual(payloads, [[first], [second]]);
+  assert.equal(await durableQueue.size(), 0);
 });
