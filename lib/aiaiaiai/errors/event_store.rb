@@ -27,16 +27,29 @@ module Aiaiaiai
       end
 
       def insert(event)
-        attributes = PERSISTED_FIELDS.to_h { |field| [field.to_sym, event[field]] }
-        attributes[:observed_at] = Time.iso8601(attributes.fetch(:observed_at))
-        attributes[:context] = Sequel.pg_jsonb(attributes.fetch(:context))
-        attributes[:tags] = Sequel.pg_jsonb(attributes.fetch(:tags))
-        @database[:error_events].insert(attributes)
+        @database[:error_events].insert(attributes_for(event))
         event.fetch('event_id')
+      end
+
+      def insert_batch(events)
+        @database.transaction do
+          events.each { |event| @database[:error_events].insert(attributes_for(event)) }
+        end
+        events.map { |event| event.fetch('event_id') }
       end
 
       def close
         @database.disconnect if @owns_database
+      end
+
+      private
+
+      def attributes_for(event)
+        attributes = PERSISTED_FIELDS.to_h { |field| [field.to_sym, event[field]] }
+        attributes[:observed_at] = Time.iso8601(attributes.fetch(:observed_at))
+        attributes[:context] = Sequel.pg_jsonb(attributes.fetch(:context))
+        attributes[:tags] = Sequel.pg_jsonb(attributes.fetch(:tags))
+        attributes
       end
     end
   end
