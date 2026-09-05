@@ -42,7 +42,9 @@ module Aiaiaiai
 
         r.post('v1', 'events') { ingest_event(r) }
         r.post('v1', 'browser', 'events') { ingest_browser_event(r) }
-        r.on('v1', 'browser', 'events') { r.options { browser_preflight(r) } }
+        r.on('v1', 'browser', 'events') do
+          browser_preflight(r) if r.env['REQUEST_METHOD'] == 'OPTIONS'
+        end
       end
 
       def ingest_event(request)
