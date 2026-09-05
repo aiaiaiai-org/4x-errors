@@ -68,7 +68,7 @@ module Aiaiaiai
       end
 
       def grouped_browser_events(events)
-        events.tally { |event| event.fetch('project') }
+        events.map { |event| event.fetch('project') }.tally
       end
 
       def consume_browser_budget(request, project, origin, count)
