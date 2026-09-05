@@ -36,7 +36,8 @@ module Aiaiaiai
       def normalize_browser_events(request, payload)
         return [payload] unless payload.is_a?(Array)
 
-        request.halt json_error(422, 'invalid_batch') if payload.empty? || payload.length > MAX_BROWSER_BATCH_SIZE
+        invalid_batch = payload.empty? || payload.length > MAX_BROWSER_BATCH_SIZE
+        request.halt json_error(422, 'invalid_batch') if invalid_batch
         payload
       end
 
