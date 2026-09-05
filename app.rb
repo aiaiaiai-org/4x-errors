@@ -40,16 +40,17 @@ module Aiaiaiai
       end
 
       def ingest_event(request)
+        event = parse_json(request, read_event_body(request))
+        authorize_event(request, event)
+        validate_event(request, event)
+        persist_event(event)
+      end
+
+      def read_event_body(request)
         body = request.body.read(MAX_REQUEST_BYTES + 1)
         request.halt json_error(413, 'request_too_large') if body.bytesize > MAX_REQUEST_BYTES
         request.halt json_error(503, 'collector_unconfigured') unless collector_configured?
-
-        event = parse_json(request, body)
-        authorize_event(request, event)
-        validate_event(request, event)
-        event_id = self.class.event_store.insert(event)
-        response.status = 201
-        { event_id: event_id }
+        body
       end
 
       def parse_json(request, body)
@@ -68,6 +69,12 @@ module Aiaiaiai
       def validate_event(request, event)
         errors = EventValidator.new.validate(event)
         request.halt json_error(422, 'invalid_event', errors) unless errors.empty?
+      end
+
+      def persist_event(event)
+        event_id = self.class.event_store.insert(event)
+        response.status = 201
+        { event_id: event_id }
       end
 
       def collector_configured?
