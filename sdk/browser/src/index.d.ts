@@ -6,6 +6,10 @@ export interface BrowserReporterConfig {
   source: string;
   collectorEndpoint?: string;
   transport?: (event: ErrorEventV1) => void | Promise<void>;
+  runtimeTarget?: {
+    addEventListener(type: string, listener: () => void): void;
+    removeEventListener?(type: string, listener: () => void): void;
+  };
   now?: () => Date;
   randomUUID?: () => string;
 }
@@ -42,6 +46,7 @@ export interface ErrorEventV1 {
 export interface BrowserReporter {
   report(input: ErrorReportInput): void;
   flush(): Promise<void>;
+  dispose(): void;
 }
 
 export function createBrowserReporter(config?: Partial<BrowserReporterConfig>): BrowserReporter;
