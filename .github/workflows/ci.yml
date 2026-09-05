@@ -16,11 +16,13 @@ jobs:
     name: Ruby correctness
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: .ruby-version
           bundler-cache: true
+      - name: Verify locked dependencies
+        run: bundle check
       - name: Check formatting and lint
         run: bundle exec rubocop
       - name: Run tests
@@ -30,6 +32,6 @@ jobs:
     name: Container build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build image
         run: docker build --tag 4x-errors:ci .
