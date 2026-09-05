@@ -13,14 +13,17 @@ module Aiaiaiai
     class IngestAuthenticator
       BEARER = /\ABearer (?<token>.+)\z/
       SHA256_HEX = /\A[0-9a-f]{64}\z/i
+      EMPTY_DIGESTS = [].freeze
 
       def self.from_json(json)
         configuration = JSON.parse(json)
-        raise ArgumentError, 'ingest token configuration must be an object' unless configuration.is_a?(Hash)
+        unless configuration.is_a?(Hash)
+          raise ArgumentError, 'ingest token configuration must be an object'
+        end
 
         new(configuration)
-      rescue JSON::ParserError => e
-        raise ArgumentError, 'ingest token configuration must be valid JSON' from e
+      rescue JSON::ParserError
+        raise ArgumentError, 'ingest token configuration must be valid JSON'
       end
 
       def initialize(project_digests)
@@ -38,11 +41,11 @@ module Aiaiaiai
 
       private
 
-      EMPTY_DIGESTS = [].freeze
-
       def normalize(project_digests)
         project_digests.to_h do |project, digests|
-          raise ArgumentError, 'project names must be non-empty strings' unless valid_project?(project)
+          unless valid_project?(project)
+            raise ArgumentError, 'project names must be non-empty strings'
+          end
 
           [project, normalize_digests(digests)]
         end.freeze
@@ -50,8 +53,12 @@ module Aiaiaiai
 
       def normalize_digests(digests)
         values = digests.is_a?(Array) ? digests : [digests]
-        raise ArgumentError, 'each project must have at least one ingest token digest' if values.empty?
-        raise ArgumentError, 'ingest token digests must be SHA-256 hex strings' unless values.all? { |value| valid_digest?(value) }
+        if values.empty?
+          raise ArgumentError, 'each project must have at least one ingest token digest'
+        end
+        unless values.all? { |value| valid_digest?(value) }
+          raise ArgumentError, 'ingest token digests must be SHA-256 hex strings'
+        end
 
         values.map { |value| [value].pack('H*').freeze }.freeze
       end
@@ -67,7 +74,8 @@ module Aiaiaiai
       def bearer_token(authorization)
         return unless authorization.is_a?(String)
 
-        BEARER.match(authorization)&.fetch(:token)
+        match = BEARER.match(authorization)
+        match && match[:token]
       end
     end
   end
