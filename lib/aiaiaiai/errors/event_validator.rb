@@ -4,6 +4,7 @@
 # Repository license is not selected yet; no SPDX identifier is asserted here.
 
 require 'json'
+require 'time'
 
 module Aiaiaiai
   module Errors
@@ -11,6 +12,7 @@ module Aiaiaiai
     class EventValidator
       MAX_CONTEXT_BYTES = 16_384
       MAX_TAGS = 32
+      MAX_TAG_LENGTH = 255
       REQUIRED_FIELDS = %w[
         protocol_version event_id error_id project source severity message full_text
         observed_at context tags
@@ -19,18 +21,15 @@ module Aiaiaiai
       ALLOWED_FIELDS = (REQUIRED_FIELDS + OPTIONAL_FIELDS).freeze
       ERROR_ID = /\A[a-z0-9]+(?:\.[a-z0-9]+)+\z/
       FAMILY_ID = /\Afamily\.[a-z0-9]+(?:\.[a-z0-9]+)+\z/
-      UUID = /\A[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/i
+      UUID = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
 
-      LIMITS = {
-        'protocol_version' => 32,
-        'error_id' => 255,
-        'project' => 255,
-        'source' => 255,
-        'severity' => 64,
-        'message' => 4096,
-        'full_text' => 32_768,
-        'family_id' => 255,
-        'correlation_id' => 255
+      STRING_RULES = {
+        'project' => [1, 255],
+        'source' => [1, 255],
+        'severity' => [1, 64],
+        'message' => [1, 4096],
+        'full_text' => [0, 32_768],
+        'correlation_id' => [0, 255]
       }.freeze
 
       def validate(event)
@@ -39,7 +38,8 @@ module Aiaiaiai
         errors = []
         validate_fields(event, errors)
         validate_identifiers(event, errors)
-        LIMITS.each { |field, limit| validate_limited_string(event, field, limit, errors) }
+        STRING_RULES.each { |field, rule| validate_string(event, field, *rule, errors) }
+        validate_observed_at(value(event, 'observed_at'), errors)
         validate_context(value(event, 'context'), errors)
         validate_tags(value(event, 'tags'), errors)
         errors
@@ -69,15 +69,23 @@ module Aiaiaiai
         validate_optional_pattern(caused_by, 'caused_by_event_id', UUID, errors)
       end
 
-      def validate_limited_string(event, field, limit, errors)
+      def validate_string(event, field, minimum, maximum, errors)
         return unless present_key?(event, field)
 
         field_value = value(event, field)
         return if field_value.nil? && OPTIONAL_FIELDS.include?(field)
         return errors << "#{field} must be a string" unless field_value.is_a?(String)
 
-        errors << "#{field} must not be empty" if field_value.empty?
-        errors << "#{field} exceeds #{limit} characters" if field_value.length > limit
+        errors << "#{field} must not be empty" if minimum.positive? && field_value.empty?
+        errors << "#{field} exceeds #{maximum} characters" if field_value.length > maximum
+      end
+
+      def validate_observed_at(observed_at, errors)
+        return errors << 'observed_at must be a date-time string' unless observed_at.is_a?(String)
+
+        Time.iso8601(observed_at)
+      rescue ArgumentError
+        errors << 'observed_at must be a valid date-time'
       end
 
       def validate_context(context, errors)
@@ -91,7 +99,17 @@ module Aiaiaiai
         return errors << 'tags must be an array' unless tags.is_a?(Array)
 
         errors << "tags exceeds #{MAX_TAGS} items" if tags.length > MAX_TAGS
-        errors << 'tags must contain strings only' unless tags.all?(String)
+        errors << 'tags must be unique' unless tags.uniq.length == tags.length
+        validate_tag_values(tags, errors)
+      end
+
+      def validate_tag_values(tags, errors)
+        return errors << 'tags must contain strings only' unless tags.all?(String)
+
+        errors << 'tags must not contain empty strings' if tags.any?(&:empty?)
+        return unless tags.any? { |tag| tag.length > MAX_TAG_LENGTH }
+
+        errors << "tags must not exceed #{MAX_TAG_LENGTH} characters"
       end
 
       def validate_pattern(field_value, field, pattern, errors)
