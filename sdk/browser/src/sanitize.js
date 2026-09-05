@@ -7,7 +7,16 @@ const TRUNCATED = '[TRUNCATED]';
 const MAX_DEPTH = 8;
 const MAX_STRING_LENGTH = 4096;
 const MAX_CONTEXT_BYTES = 16_384;
-const SENSITIVE_KEY = /(?:password|passwd|authorization|cookie|token|secret|api[_-]?key)/i;
+const EXACT_SENSITIVE_KEYS = new Set([
+  'password',
+  'passwd',
+  'authorization',
+  'cookie',
+  'setcookie',
+  'secret',
+  'clientsecret',
+  'apikey'
+]);
 
 export function sanitizeContext(value) {
   const seen = new WeakSet();
@@ -31,12 +40,17 @@ function sanitizeValue(value, depth, seen) {
     return Object.fromEntries(
       Object.entries(value).map(([key, entry]) => [
         key,
-        SENSITIVE_KEY.test(key) ? REDACTED : sanitizeValue(entry, depth + 1, seen)
+        isSensitiveKey(key) ? REDACTED : sanitizeValue(entry, depth + 1, seen)
       ])
     );
   } finally {
     seen.delete(value);
   }
+}
+
+function isSensitiveKey(key) {
+  const normalized = String(key).replace(/[^a-z0-9]/gi, '').toLowerCase();
+  return EXACT_SENSITIVE_KEYS.has(normalized) || normalized.endsWith('token');
 }
 
 function fitSerializedContext(context) {
