@@ -9,8 +9,9 @@ RUN apt-get update \
     && apt-get install --yes --no-install-recommends build-essential libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY Gemfile .ruby-version ./
-RUN bundle config set without 'development test' \
+COPY Gemfile Gemfile.lock .ruby-version ./
+RUN bundle config set deployment 'true' \
+    && bundle config set without 'development test' \
     && bundle install
 
 FROM ruby:4.0.6-slim
@@ -22,6 +23,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /usr/local/bundle /usr/local/bundle
+COPY Gemfile Gemfile.lock ./
 COPY app.rb config.ru ./
 
 ENV RACK_ENV=production
