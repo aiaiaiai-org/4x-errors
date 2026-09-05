@@ -7,6 +7,7 @@ require 'json'
 require 'roda'
 require_relative 'lib/aiaiaiai/errors/browser_ingest'
 require_relative 'lib/aiaiaiai/errors/browser_ingest_policy'
+require_relative 'lib/aiaiaiai/errors/browser_rate_limiter'
 require_relative 'lib/aiaiaiai/errors/event_store'
 require_relative 'lib/aiaiaiai/errors/event_validator'
 require_relative 'lib/aiaiaiai/errors/ingest_authenticator'
@@ -21,7 +22,7 @@ module Aiaiaiai
       MAX_REQUEST_BYTES = 524_288
 
       class << self
-        attr_accessor :event_store, :authenticator, :browser_policy
+        attr_accessor :event_store, :authenticator, :browser_policy, :browser_rate_limiter
       end
 
       plugin :json
@@ -99,6 +100,7 @@ module Aiaiaiai
       end
     end
 
+    App.browser_rate_limiter = BrowserRateLimiter.new
     App.event_store = EventStore.connect(ENV.fetch('DATABASE_URL')) if ENV.key?('DATABASE_URL')
     if ENV.key?('INGEST_TOKEN_DIGESTS')
       App.authenticator = IngestAuthenticator.from_json(ENV.fetch('INGEST_TOKEN_DIGESTS'))
