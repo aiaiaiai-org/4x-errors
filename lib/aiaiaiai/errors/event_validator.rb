@@ -65,7 +65,8 @@ module Aiaiaiai
         validate_pattern(value(event, 'event_id'), 'event_id', UUID, errors)
         validate_pattern(value(event, 'error_id'), 'error_id', ERROR_ID, errors)
         validate_optional_pattern(value(event, 'family_id'), 'family_id', FAMILY_ID, errors)
-        validate_optional_pattern(value(event, 'caused_by_event_id'), 'caused_by_event_id', UUID, errors)
+        caused_by = value(event, 'caused_by_event_id')
+        validate_optional_pattern(caused_by, 'caused_by_event_id', UUID, errors)
       end
 
       def validate_limited_string(event, field, limit, errors)
