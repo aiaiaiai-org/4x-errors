@@ -1,6 +1,8 @@
 // © 2026 aiaiaiai · aiaiaiai.org
 // Repository license is not selected yet; no SPDX identifier is asserted here.
 
+import { sanitizeContext } from './sanitize.js';
+
 const PROTOCOL_VERSION = 'errors.v1';
 const ERROR_ID = /^[a-z0-9]+(?:\.[a-z0-9]+)+$/;
 
@@ -59,7 +61,7 @@ function buildEvent(config, input) {
     message: stringOr(input.message, input.errorId),
     full_text: stringOr(input.fullText, stringOr(input.message, input.errorId)),
     observed_at: observedAt.toISOString(),
-    context: objectOrEmpty(input.context),
+    context: sanitizeContext(input.context),
     tags: stringArrayOrEmpty(input.tags),
     family_id: nullableString(input.familyId),
     caused_by_event_id: nullableString(input.causedByEventId),
@@ -82,10 +84,6 @@ function stringOr(value, fallback) {
 
 function nullableString(value) {
   return nonEmptyString(value) ? value : null;
-}
-
-function objectOrEmpty(value) {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
 function stringArrayOrEmpty(value) {
