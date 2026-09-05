@@ -55,6 +55,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Install browser SDK test dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
       - name: Run browser SDK tests
         run: npm test
       - name: Verify package can be packed
