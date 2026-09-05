@@ -59,6 +59,10 @@ The first consumer is `nilx-one/web`. Planned integrations then extend to `aiaia
 
 The project starts as an error event store and causal model rather than a Sentry clone. Grouping, diagnostics and higher-level observability should grow from verified needs without expanding the critical reporting surface unnecessarily.
 
+## License
+
+Licensed under the Apache License, Version 2.0. See `LICENSE` and `NOTICE`.
+
 ---
 
 © 2026 aiaiaiai · aiaiaiai.org
