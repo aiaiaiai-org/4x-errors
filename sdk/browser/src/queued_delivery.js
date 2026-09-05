@@ -38,7 +38,7 @@ export function createQueuedDelivery({
     },
     flush() {
       pipeline = pipeline
-        .then(() => drainQueue(queue, send, limit, byteLimit, retry, circuit))
+        .then(() => drainBacklog(queue, send, limit, byteLimit, retry, circuit))
         .catch(() => undefined);
       return pipeline;
     }
@@ -52,23 +52,30 @@ async function submitEvent(queue, send, event, batchSize, maxRequestBytes, retry
   }
 
   await queue.enqueue(event);
-  await drainQueue(queue, send, batchSize, maxRequestBytes, retry, circuit);
+  await drainOnce(queue, send, batchSize, maxRequestBytes, retry, circuit);
 }
 
-async function drainQueue(queue, send, batchSize, maxRequestBytes, retry, circuit) {
-  if (!queue?.available || circuit.isOpen()) return;
+async function drainBacklog(queue, send, batchSize, maxRequestBytes, retry, circuit) {
+  while (await drainOnce(queue, send, batchSize, maxRequestBytes, retry, circuit)) {
+    // Successful bounded batches continue until the durable backlog is empty.
+  }
+}
+
+async function drainOnce(queue, send, batchSize, maxRequestBytes, retry, circuit) {
+  if (!queue?.available || circuit.isOpen()) return false;
 
   const queued = await queue.peek(batchSize);
-  if (queued.length === 0) return;
+  if (queued.length === 0) return false;
 
   const batch = selectRequestBatch(queued, maxRequestBytes);
-  if (batch.length === 0) return;
+  if (batch.length === 0) return false;
 
   const delivered = await sendWithRetry(send, batch, retry);
   circuit.record(delivered);
-  if (!delivered) return;
+  if (!delivered) return false;
 
   await queue.remove(batch.map((event) => event.event_id));
+  return true;
 }
 
 function selectRequestBatch(events, maxRequestBytes) {
