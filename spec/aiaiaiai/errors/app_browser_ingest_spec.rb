@@ -11,24 +11,17 @@ require_relative '../../../app'
 RSpec.describe Aiaiaiai::Errors::App do
   include Rack::Test::Methods
 
-  class RecordingEventStore
-    attr_reader :events
-
-    def initialize
-      @events = []
-    end
-
-    def insert(event)
-      @events << event
-      event.fetch('event_id')
-    end
-  end
-
   def app
     described_class.app
   end
 
-  let(:store) { RecordingEventStore.new }
+  def post_browser_event(payload)
+    header 'Origin', 'https://nilx.one'
+    post '/v1/browser/events', JSON.generate(payload), 'CONTENT_TYPE' => 'application/json'
+  end
+
+  let(:recorded_events) { [] }
+  let(:store) { instance_double(Aiaiaiai::Errors::EventStore) }
   let(:policy) do
     Aiaiaiai::Errors::BrowserIngestPolicy.new(
       'nilx-one/web' => ['https://nilx.one']
@@ -40,6 +33,10 @@ RSpec.describe Aiaiaiai::Errors::App do
   end
 
   before do
+    allow(store).to receive(:insert) do |payload|
+      recorded_events << payload
+      payload.fetch('event_id')
+    end
     described_class.event_store = store
     described_class.browser_policy = policy
   end
@@ -50,22 +47,20 @@ RSpec.describe Aiaiaiai::Errors::App do
   end
 
   it 'accepts an allowed zero-secret browser event' do
-    header 'Origin', 'https://nilx.one'
-    post '/v1/browser/events', JSON.generate(event), 'CONTENT_TYPE' => 'application/json'
+    post_browser_event(event)
 
     expect(last_response.status).to eq(201)
     expect(last_response.headers['Access-Control-Allow-Origin']).to eq('https://nilx.one')
-    expect(store.events).to eq([event])
+    expect(recorded_events).to eq([event])
   end
 
   it 'rejects a project that is not bound to the request origin' do
     event['project'] = 'other/project'
-    header 'Origin', 'https://nilx.one'
-    post '/v1/browser/events', JSON.generate(event), 'CONTENT_TYPE' => 'application/json'
+    post_browser_event(event)
 
     expect(last_response.status).to eq(403)
     expect(JSON.parse(last_response.body)).to eq('error' => 'project_origin_not_allowed')
-    expect(store.events).to be_empty
+    expect(recorded_events).to be_empty
   end
 
   it 'answers CORS preflight only for configured origins' do
