@@ -1,0 +1,131 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+contract:
+  name: 4x-errors-trusted-server-integration
+  version: 1
+  status: client_integration_ready
+  protocol: errors.v1
+
+scope:
+  purpose: >
+    Define the smallest stable boundary required for a trusted server-side consumer
+    to report errors without depending on collector implementation details.
+  first_consumer: nilx-one/web
+  applies_to:
+    - trusted_server_adapters
+  excludes:
+    - browser_direct_ingest
+    - native_public_ingest
+    - direct_database_access
+    - supabase_client_access
+
+configuration:
+  required:
+    collector_endpoint:
+      description: Base URL of the independently operated 4x-errors collector.
+      secret: false
+    project:
+      description: Exact project identity bound to the ingest token.
+      example: nilx-one/web
+      secret: false
+    ingest_token:
+      description: High-entropy Bearer token provisioned for exactly one project.
+      secret: true
+      storage: server_side_secret_only
+  forbidden:
+    - database_credentials
+    - supabase_service_credentials
+    - permanent_ingest_token_in_browser_code
+
+request:
+  method: POST
+  path: /v1/events
+  headers:
+    Content-Type: application/json
+    Authorization: Bearer <project-bound-ingest-token>
+  body:
+    contract: protocol/errors.v1/error-event.schema.json
+    project_rule: must_equal_the_project_bound_to_the_ingest_token
+  limits:
+    request_bytes_max: 524288
+    context_serialized_bytes_max: 16384
+    tags_max: 32
+    message_characters_max: 4096
+    full_text_characters_max: 32768
+
+response:
+  success:
+    status: 201
+    body:
+      event_id: UUID
+  failures:
+    400: invalid_json
+    401: unauthorized
+    413: request_too_large
+    422: invalid_event
+    503: collector_unconfigured
+  rule: >
+    A non-success response is a reporting failure only and must never become a
+    host-application failure.
+
+client_invariants:
+  - reporting_must_never_raise_or_propagate_into_host_application_logic
+  - collector_unavailability_must_not_block_the_host_application
+  - use_short_network_timeouts
+  - retry_must_be_bounded
+  - retry_must_not_amplify_collector_or_network_outages
+  - never_log_or_expose_the_plaintext_ingest_token
+  - never_send_events_for_a_project_other_than_the_configured_project
+  - protocol_payloads_must_remain_errors_v1_compatible
+  - consumer_must_not_manage_collector_postgresql_or_supabase_state
+
+first_consumer:
+  project: nilx-one/web
+  adapter_expectation: >
+    Implement a language-appropriate thin server-side reporter around this HTTP
+    contract. The consumer does not need Ruby, Sequel, PostgreSQL or Supabase APIs.
+  initial_error_ids:
+    - ai.model.unavailable
+    - ai.model.load.failed
+    - identity.provider.unavailable
+    - identity.authorization.failed
+  integration_definition_of_done:
+    - adapter_configuration_is_server_side
+    - explicit_errors_v1_event_can_be_reported
+    - collector_failure_is_non_fatal_to_nilx_one_web
+    - token_is_bound_to_nilx_one_web
+    - no_database_credential_is_added_to_nilx_one_web
+
+collector_readiness:
+  complete:
+    - errors_v1_event_contract
+    - error_event_postgresql_persistence
+    - event_validation
+    - post_v1_events
+    - project_bound_trusted_ingest_authentication
+    - authenticated_http_to_postgresql_round_trip_test
+    - protected_production_migration_runner
+  intentionally_not_required_for_first_client:
+    - error_registry_persistence
+    - error_family_persistence
+    - causal_relation_persistence
+    - read_api
+    - browser_offline_queue
+    - browser_untrusted_ingest_boundary
+  external_actions_still_required_before_production_traffic:
+    - deploy_the_collector
+    - provision_a_high_entropy_nilx_one_web_ingest_token
+    - configure_its_sha256_digest_on_the_collector
+    - store_the_plaintext_token_only_in_nilx_one_web_server_secrets
+
+security_boundary:
+  trusted_server:
+    authentication: project_bound_bearer_token
+    collector_storage: sha256_digest_only
+    comparison: constant_time
+  browser:
+    trusted_server_token_allowed: false
+    note: >
+      Browser reporting requires the separate untrusted ingest design from the
+      portable SDK roadmap and is not covered by this contract.
