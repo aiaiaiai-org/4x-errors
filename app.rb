@@ -9,6 +9,7 @@ require_relative 'lib/aiaiaiai/errors/event_store'
 require_relative 'lib/aiaiaiai/errors/event_validator'
 
 module Aiaiaiai
+  # Shared 4x-errors collector and reporting components.
   module Errors
     # HTTP entry point for the 4x-errors collector.
     class App < Roda
