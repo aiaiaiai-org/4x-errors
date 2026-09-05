@@ -22,9 +22,24 @@ endpoint:
   method: POST
   path: /v1/browser/events
   body:
-    contract: protocol/errors.v1/error-event.schema.json
+    accepted_shapes:
+      - contract: protocol/errors.v1/error-event.schema.json
+      - batch:
+          item_contract: protocol/errors.v1/error-event.schema.json
+          items_min: 1
+          items_max: 50
+          persistence: atomic
+          rule: any_invalid_or_unauthorised_event_rejects_the_entire_batch_before_persistence
+  responses:
+    single_success:
+      status: 201
+      body: '{"event_id":"<uuid>"}'
+    batch_success:
+      status: 201
+      body: '{"event_ids":["<uuid>","..."]}'
   limits:
     request_bytes_max: 524288
+    batch_items_max: 50
     context_serialized_bytes_max: 16384
     tags_max: 32
     message_characters_max: 4096
@@ -52,7 +67,7 @@ collector_controls:
     - errors_v1_validation
     - edge_or_collector_rate_limiting
     - abuse_monitoring
-    - bounded_batch_size_when_batching_is_added
+    - bounded_batch_size
   recommended:
     - waf_or_equivalent_edge_protection
     - per_project_and_per_source_rate_limits
