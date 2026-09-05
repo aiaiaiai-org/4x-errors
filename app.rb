@@ -51,11 +51,9 @@ module Aiaiaiai
       end
 
       def ingest_browser_event(request)
-        request.halt json_error(503, 'collector_unconfigured') unless browser_collector_configured?
-        origin = request.env['HTTP_ORIGIN']
-        request.halt json_error(403, 'origin_not_allowed') unless browser_origin_allowed?(origin)
-
-        set_browser_cors(origin)
+        ensure_browser_configured!(request)
+        origin = require_browser_origin!(request)
+        apply_browser_cors(origin)
         event = parse_json(request, read_event_body(request))
         validate_event(request, event)
         authorize_browser_project(request, event, origin)
@@ -63,14 +61,10 @@ module Aiaiaiai
       end
 
       def browser_preflight(request)
-        return request.halt json_error(503, 'collector_unconfigured') unless browser_collector_configured?
-
-        origin = request.env['HTTP_ORIGIN']
-        request.halt json_error(403, 'origin_not_allowed') unless browser_origin_allowed?(origin)
-        set_browser_cors(origin)
-        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type'
-        response['Access-Control-Max-Age'] = '600'
+        ensure_browser_configured!(request)
+        origin = require_browser_origin!(request)
+        apply_browser_cors(origin)
+        apply_preflight_headers
         response.status = 204
         ''
       end
@@ -119,19 +113,38 @@ module Aiaiaiai
         self.class.event_store && self.class.browser_policy&.configured?
       end
 
+      def ensure_browser_configured!(request)
+        return if browser_collector_configured?
+
+        request.halt json_error(503, 'collector_unconfigured')
+      end
+
+      def require_browser_origin!(request)
+        origin = request.env['HTTP_ORIGIN']
+        request.halt json_error(403, 'origin_not_allowed') unless browser_origin_allowed?(origin)
+        origin
+      end
+
       def browser_origin_allowed?(origin)
         origin && self.class.browser_policy.origin_allowed?(origin)
       end
 
-      def set_browser_cors(origin)
+      def apply_browser_cors(origin)
         response['Access-Control-Allow-Origin'] = origin
         response['Vary'] = 'Origin'
+      end
+
+      def apply_preflight_headers
+        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type'
+        response['Access-Control-Max-Age'] = '600'
       end
 
       def json_error(status, code, details = nil)
         payload = { error: code }
         payload[:details] = details if details
-        [status, { 'content-type' => 'application/json' }, [JSON.generate(payload)]]
+        headers = { 'content-type' => 'application/json' }.merge(response.headers)
+        [status, headers, [JSON.generate(payload)]]
       end
     end
 
