@@ -5,9 +5,9 @@
 
 require 'sequel'
 
-RSpec.describe 'PostgreSQL test boundary' do
+RSpec.describe Sequel do
   it 'connects only through the dedicated test database URL' do
-    database = Sequel.connect(ENV.fetch('TEST_DATABASE_URL'))
+    database = described_class.connect(ENV.fetch('TEST_DATABASE_URL'))
 
     expect(database.get(Sequel.lit('1'))).to eq(1)
   ensure
