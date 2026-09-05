@@ -2,6 +2,7 @@
 // Repository license is not selected yet; no SPDX identifier is asserted here.
 
 const DEFAULT_BATCH_SIZE = 50;
+const DEFAULT_MAX_REQUEST_BYTES = 512 * 1024;
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_BASE_DELAY_MS = 250;
 const DEFAULT_MAX_DELAY_MS = 4_000;
@@ -12,6 +13,7 @@ export function createQueuedDelivery({
   queue,
   send,
   batchSize = DEFAULT_BATCH_SIZE,
+  maxRequestBytes = DEFAULT_MAX_REQUEST_BYTES,
   maxAttempts = DEFAULT_MAX_ATTEMPTS,
   baseDelayMs = DEFAULT_BASE_DELAY_MS,
   maxDelayMs = DEFAULT_MAX_DELAY_MS,
@@ -22,65 +24,82 @@ export function createQueuedDelivery({
   nowMs = Date.now
 }) {
   let pipeline = Promise.resolve();
-  const limit = positiveInteger(batchSize) ? batchSize : DEFAULT_BATCH_SIZE;
+  const limit = positiveInteger(batchSize) ? Math.min(batchSize, DEFAULT_BATCH_SIZE) : DEFAULT_BATCH_SIZE;
+  const byteLimit = positiveInteger(maxRequestBytes) ? maxRequestBytes : DEFAULT_MAX_REQUEST_BYTES;
   const retry = normalizeRetry({ maxAttempts, baseDelayMs, maxDelayMs, sleep, random });
   const circuit = createCircuit({ failureThreshold, cooldownMs, nowMs });
 
   return {
     submit(event) {
-      pipeline = pipeline.then(() => submitEvent(queue, send, event, limit, retry, circuit)).catch(() => undefined);
+      pipeline = pipeline
+        .then(() => submitEvent(queue, send, event, limit, byteLimit, retry, circuit))
+        .catch(() => undefined);
       return pipeline;
     },
     flush() {
-      pipeline = pipeline.then(() => drainQueue(queue, send, limit, retry, circuit)).catch(() => undefined);
+      pipeline = pipeline
+        .then(() => drainQueue(queue, send, limit, byteLimit, retry, circuit))
+        .catch(() => undefined);
       return pipeline;
     }
   };
 }
 
-async function submitEvent(queue, send, event, batchSize, retry, circuit) {
+async function submitEvent(queue, send, event, batchSize, maxRequestBytes, retry, circuit) {
   if (!queue?.available) {
     await safeSend(send, event);
     return;
   }
 
   await queue.enqueue(event);
-  await drainQueue(queue, send, batchSize, retry, circuit);
+  await drainQueue(queue, send, batchSize, maxRequestBytes, retry, circuit);
 }
 
-async function drainQueue(queue, send, batchSize, retry, circuit) {
+async function drainQueue(queue, send, batchSize, maxRequestBytes, retry, circuit) {
   if (!queue?.available || circuit.isOpen()) return;
 
-  const events = await queue.peek(batchSize);
-  if (events.length === 0) return;
+  const queued = await queue.peek(batchSize);
+  if (queued.length === 0) return;
 
-  const acknowledged = [];
-  for (const event of events) {
-    if (circuit.isOpen()) break;
-    const delivered = await sendWithRetry(send, event, retry);
-    circuit.record(delivered);
-    if (!delivered) break;
-    acknowledged.push(event.event_id);
-  }
+  const batch = selectRequestBatch(queued, maxRequestBytes);
+  if (batch.length === 0) return;
 
-  if (acknowledged.length > 0) await queue.remove(acknowledged);
+  const delivered = await sendWithRetry(send, batch, retry);
+  circuit.record(delivered);
+  if (!delivered) return;
+
+  await queue.remove(batch.map((event) => event.event_id));
 }
 
-async function sendWithRetry(send, event, retry) {
+function selectRequestBatch(events, maxRequestBytes) {
+  const batch = [];
+  for (const event of events) {
+    const candidate = [...batch, event];
+    if (serializedBytes(candidate) > maxRequestBytes) break;
+    batch.push(event);
+  }
+  return batch;
+}
+
+async function sendWithRetry(send, payload, retry) {
   for (let attempt = 1; attempt <= retry.maxAttempts; attempt += 1) {
-    if (await safeSend(send, event)) return true;
+    if (await safeSend(send, payload)) return true;
     if (attempt === retry.maxAttempts) break;
     await retry.sleep(jitteredDelay(attempt, retry));
   }
   return false;
 }
 
-async function safeSend(send, event) {
+async function safeSend(send, payload) {
   try {
-    return (await send(event)) === true;
+    return (await send(payload)) === true;
   } catch {
     return false;
   }
+}
+
+function serializedBytes(value) {
+  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }
 
 function createCircuit({ failureThreshold, cooldownMs, nowMs }) {

@@ -7,7 +7,7 @@ export function createBrowserHttpTransport({ collectorEndpoint, fetchImpl = glob
   const endpoint = normalizeEndpoint(collectorEndpoint);
   if (!endpoint || typeof fetchImpl !== 'function') return null;
 
-  return async (event) => {
+  return async (payload) => {
     const response = await fetchImpl(endpoint, {
       method: 'POST',
       mode: 'cors',
@@ -15,7 +15,7 @@ export function createBrowserHttpTransport({ collectorEndpoint, fetchImpl = glob
       headers: {
         'content-type': 'application/json'
       },
-      body: JSON.stringify(event)
+      body: JSON.stringify(payload)
     });
 
     return response.ok;
