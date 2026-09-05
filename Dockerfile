@@ -1,5 +1,5 @@
 # © 2026 aiaiaiai · aiaiaiai.org
-# Repository license is not selected yet; no SPDX identifier is asserted here.
+# SPDX-License-Identifier: Apache-2.0
 
 FROM ruby:4.0.6-slim AS build
 
@@ -25,6 +25,7 @@ RUN apt-get update \
 COPY --from=build /usr/local/bundle /usr/local/bundle
 COPY Gemfile Gemfile.lock ./
 COPY app.rb config.ru ./
+COPY lib ./lib
 
 ENV RACK_ENV=production
 EXPOSE 9292
