@@ -2,6 +2,7 @@
   "name": "@aiaiaiai/4x-errors-browser",
   "version": "0.0.0-development",
   "description": "Fail-safe browser reporter for the 4x-errors protocol.",
+  "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
   "exports": {
