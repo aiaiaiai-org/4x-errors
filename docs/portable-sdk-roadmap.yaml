@@ -1,0 +1,539 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+
+document:
+  name: 4x-errors-portable-sdk-roadmap
+  version: 1
+  status: implementation_plan
+  project: aiaiaiai-org/4x-errors
+
+goal:
+  summary: >
+    Turn 4x-errors into a transport-neutral error reporting system that
+    applications can integrate as a small library without depending on
+    their primary backend being available.
+  target_experience: >
+    A project installs its platform adapter, configures project identity
+    and the collector endpoint, then reports errors through one stable API.
+    Reporting failures must never break the host application.
+
+core_principle:
+  application_path_independent_reporting: true
+  description: >
+    Error reporting SHOULD remain operational when the host application's
+    normal backend is unavailable, overloaded, disconnected, or otherwise
+    unable to receive application traffic.
+  example:
+    application: nilx-one/web
+    application_backend: api.nilx.one
+    error_collector: errors.aiaiaiai.org
+    invariant: >
+      Failure of api.nilx.one does not by itself prevent an already-running
+      nilx.one client from recording and attempting to deliver an error event.
+
+architecture:
+  layers:
+    protocol:
+      owns:
+        - errors.v1
+        - error_event
+        - error_family
+        - causal_relation
+        - semantic_error_identifiers
+        - compatibility_rules
+      platform_dependencies: none
+
+    sdk_core:
+      purpose: >
+        Define platform-neutral reporting behaviour shared by every SDK.
+      owns:
+        - event_construction
+        - validation
+        - sanitisation
+        - deduplication_semantics
+        - queue_semantics
+        - retry_semantics
+        - batching_semantics
+        - failure_isolation
+        - recursion_protection
+      must_not_own:
+        - browser_APIs
+        - JVM_APIs
+        - Swift_APIs
+        - Android_APIs
+        - filesystem_implementation_details
+        - specific_HTTP_clients
+
+    platform_adapter:
+      purpose: >
+        Implement sdk_core behaviour using capabilities available on the
+        host platform without changing errors.v1.
+      first_reference_adapter: browser
+      reserved:
+        - ruby
+        - swift
+        - kotlin
+        - jvm
+        - android
+        - javascript_node
+        - typescript_node
+        - rust
+        - python
+        - other
+
+    collector:
+      purpose: Independent 4x-errors ingestion service.
+      owns:
+        - ingestion
+        - authentication_and_abuse_controls
+        - validation
+        - persistence
+        - retention
+        - diagnostics
+
+    storage:
+      initial:
+        engine: PostgreSQL
+        provider: Supabase
+      invariant: >
+        SDK consumers know nothing about PostgreSQL, Supabase, migrations,
+        or collector persistence internals.
+
+consumer_contract:
+  conceptual_api:
+    configuration:
+      - collector_endpoint
+      - project
+      - credentials_or_platform_identity
+    operation:
+      - report
+  conceptual_example: |
+    reporter = Errors.configure(...)
+    reporter.report(error)
+  invariant: >
+    The public integration surface stays small even if internal delivery
+    machinery becomes sophisticated.
+
+platform_neutral_delivery_model:
+  pipeline:
+    - capture
+    - normalise
+    - sanitise
+    - persist_locally_if_supported
+    - enqueue
+    - deduplicate
+    - batch
+    - deliver
+    - retry_if_allowed
+    - acknowledge_or_retain
+
+  capability_model:
+    durable_storage:
+      required: false
+      preferred: true
+    background_delivery:
+      required: false
+      preferred: true
+    synchronous_delivery:
+      required: false
+    network_detection:
+      required: false
+
+  rule: >
+    SDK behaviour adapts to platform capabilities without changing errors.v1
+    or application-facing reporting semantics.
+
+browser_sdk:
+  role: first_reference_client
+
+  capture:
+    automatic:
+      - window.onerror
+      - unhandledrejection
+    explicit:
+      - report
+
+  local_storage:
+    preferred: IndexedDB
+    purpose:
+      - durable_queue
+      - survive_reload
+      - survive_temporary_network_failure
+
+  delivery:
+    primary:
+      - fetch
+    lifecycle_fallback:
+      - fetch_keepalive
+      - sendBeacon
+    optional_future:
+      - ServiceWorker
+      - BackgroundSync
+
+  security_boundary:
+    browser_is_untrusted: true
+    forbidden:
+      - permanent_secret_ingest_token
+      - database_credentials
+      - Supabase_service_credentials
+    protection:
+      - origin_policy
+      - collector_rate_limiting
+      - WAF
+      - request_size_limit
+      - batch_limit
+      - sanitisation
+      - abuse_detection
+    future_auth:
+      optional:
+        - short_lived_signed_ingest_token
+
+native_sdk_model:
+  purpose: >
+    Reserve the architecture for applications that have no browser runtime.
+
+  examples:
+    kotlin_native_or_android:
+      capture:
+        - explicit_report
+        - uncaught_exception_handler_adapter
+      durable_queue:
+        possible:
+          - SQLite
+          - application_files
+          - platform_database
+      transport:
+        possible:
+          - platform_HTTP_client
+          - OkHttp
+          - Ktor
+      background_delivery:
+        possible:
+          - WorkManager
+          - platform_scheduler
+
+    swift:
+      capture:
+        - explicit_report
+        - platform_specific_failure_adapters
+      durable_queue:
+        possible:
+          - SQLite
+          - application_support_storage
+      transport:
+        possible:
+          - URLSession
+      background_delivery:
+        possible:
+          - BGTaskScheduler
+
+    ruby:
+      capture:
+        - explicit_report
+        - exception_adapter
+      durable_queue:
+        possible:
+          - memory
+          - file
+          - SQLite
+      transport:
+        possible:
+          - standard_HTTP_adapter
+
+  invariant: >
+    Platform-specific mechanisms must not leak into the protocol or collector
+    contract.
+
+reliability:
+  absolute_rule: >
+    4x-errors must never become a new failure source for the host project.
+
+  reporter:
+    never_raise_into_host: true
+    recursion_guard: required
+    timeout: short
+    retries: bounded
+
+  queue:
+    bounded: true
+    durable_when_platform_supports_it: true
+    overflow_policy: explicit
+
+  retry:
+    strategy:
+      - exponential_backoff
+      - jitter
+    bounded: true
+
+  deduplication:
+    required: true
+    purpose: >
+      Prevent one failing dependency from producing an unbounded telemetry
+      storm.
+
+  batching:
+    required: true
+
+  circuit_breaker:
+    required: true
+    purpose: >
+      Prevent 4x-errors clients from amplifying an outage or DDoS.
+
+ddos_and_outage_behaviour:
+  application_backend_down: >
+    Continue recording locally and attempt delivery through the independent
+    4x-errors collector.
+  collector_down: >
+    Retain events locally where supported and retry later.
+  network_offline: >
+    Retain events locally where supported and wait for connectivity.
+  widespread_application_failure: >
+    Deduplicate, aggregate, sample where appropriate, apply backoff, and avoid
+    creating a telemetry-generated traffic storm.
+  invariant: >
+    Error reporting degrades toward local recording and eventual delivery
+    rather than aggressive retry.
+
+security:
+  browser:
+    trusted: false
+    permanent_secret_allowed: false
+
+  server:
+    trusted: true
+    project_bound_secret_allowed: true
+
+  native:
+    trusted: partially
+    rule: >
+      Treat distributed application credentials as extractable. Authentication
+      design must not rely solely on a permanent secret embedded in the binary.
+
+  collector:
+    enforce:
+      request_max_bytes: 524288
+      batch_max_events: 50
+      message_max_chars: 4096
+      full_text_max_chars: 32768
+      context_max_serialised_bytes: 16384
+      tags_max: 32
+      unknown_top_level_fields: reject
+
+privacy:
+  sdk:
+    sanitisation_before_queue: true
+    sanitisation_before_network: true
+  rule: >
+    Sensitive application data must not be collected merely because it appeared
+    in an exception, URL, request, stack context, or platform diagnostic.
+
+implementation:
+  strategy:
+    - small_PRs
+    - one_capability_per_PR
+    - start_each_branch_from_latest_master
+    - exact_green_CI_before_merge
+
+  current:
+    completed:
+      - ruby_runtime_bootstrap
+      - errors_v1_error_event_contract
+      - causal_relation_contract
+    in_progress:
+      - postgres_test_harness
+    blocked_or_pending:
+      - error_family_contract
+
+  stages:
+    - id: 01
+      name: persistence_boundary
+      prs:
+        - postgres_test_harness
+        - error_event_persistence
+        - error_registry_persistence
+        - error_family_persistence
+        - error_relation_persistence
+      milestone: >
+        Collector has a tested persistence foundation without exposing database
+        implementation to consumers.
+
+    - id: 02
+      name: collector_ingest
+      prs:
+        - event_validator
+        - event_ingest_endpoint
+        - batch_ingest
+        - project_bound_server_auth
+      milestone: >
+        Trusted server applications can send errors.v1 events to 4x-errors
+        independently of their own database.
+
+    - id: 03
+      name: sdk_core_contract
+      prs:
+        - reporter_public_api
+        - noop_reporter
+        - failure_isolation
+        - event_builder
+        - sanitisation_contract
+      milestone: >
+        4x-errors has a stable application-facing library contract.
+
+    - id: 04
+      name: reliable_delivery
+      prs:
+        - bounded_queue
+        - deduplication
+        - batching
+        - retry_with_backoff_and_jitter
+        - circuit_breaker
+        - recursion_guard
+      milestone: >
+        Reporter can safely operate during partial outages without becoming
+        part of the outage.
+
+    - id: 05
+      name: browser_adapter
+      prs:
+        - browser_package_shell
+        - browser_explicit_report
+        - browser_global_error_capture
+        - indexeddb_durable_queue
+        - fetch_transport
+        - lifecycle_delivery
+        - offline_recovery
+        - browser_ingest_security_boundary
+      milestone: browser_library_ready
+      definition_of_done:
+        - installable_from_nilx_one_web
+        - one_small_configuration_surface
+        - explicit_report_works
+        - uncaught_errors_can_be_captured
+        - unhandled_promises_can_be_captured
+        - events_survive_page_reload_when_queued
+        - application_backend_is_not_required_for_delivery
+        - collector_failure_does_not_break_host
+        - browser_contains_no_permanent_ingest_secret
+
+    - id: 06
+      name: first_real_consumer
+      project: nilx-one/web
+      integration:
+        - install_4x_errors_browser
+        - configure_project_identity
+        - configure_collector_endpoint
+        - connect_explicit_errors
+        - enable_global_capture
+        - verify_backend_outage_scenario
+        - verify_collector_outage_scenario
+        - verify_offline_then_reconnect_delivery
+        - verify_telemetry_storm_protection
+      initial_error_ids:
+        candidates:
+          - ai.model.unavailable
+          - ai.model.load.failed
+          - identity.provider.unavailable
+          - identity.authorization.failed
+      milestone: >
+        nilx-one/web reports real production-shaped errors through 4x-errors
+        without depending on the nilx-one application backend.
+
+    - id: 07
+      name: portable_sdk_boundary
+      purpose: >
+        Prove that the library architecture is not accidentally tied to
+        JavaScript or the browser.
+      deliverables:
+        - sdk_core_conformance_spec
+        - platform_adapter_contract
+        - transport_adapter_contract
+        - durable_queue_contract
+        - test_vectors
+        - compatibility_matrix
+      milestone: multi_platform_sdk_ready
+
+    - id: 08
+      name: second_platform_proof
+      platform: TBD
+      preferred_candidate:
+        - kotlin
+      purpose: >
+        Implement a second SDK against the same protocol and SDK behavioural
+        contract without copying browser assumptions.
+      rule: >
+        Browser-specific architecture discovered during this work must move
+        behind the browser adapter rather than enter the shared contract.
+      milestone: >
+        4x-errors is demonstrated to be a genuinely portable library
+        architecture rather than a web telemetry package.
+
+package_model:
+  conceptual:
+    protocol: 4x-errors-protocol
+    sdk_contract: 4x-errors-core
+    adapters:
+      - 4x-errors-browser
+      - 4x-errors-ruby
+      - 4x-errors-swift
+      - 4x-errors-kotlin
+      - 4x-errors-rust
+  note: >
+    Names are conceptual. Do not create package naming commitments until the
+    public SDK boundary is designed.
+
+integration_target:
+  desired_developer_experience: |
+    install 4x-errors adapter
+           ↓
+    configure collector + project
+           ↓
+    report(error)
+           ↓
+    done
+
+  consumer_must_not_manage:
+    - PostgreSQL
+    - Supabase
+    - collector_migrations
+    - retry_implementation
+    - batching_implementation
+    - local_queue_implementation
+    - collector_availability
+    - error_delivery_lifecycle
+
+release_gate:
+  library_is_easy_to_connect_when:
+    - errors_v1_is_stable
+    - collector_ingest_is_operational
+    - reporter_API_is_stable
+    - reporting_never_raises_into_host
+    - delivery_is_bounded
+    - retries_are_bounded
+    - outage_amplification_is_prevented
+    - at_least_one_durable_adapter_exists
+    - nilx_one_web_integration_is_verified
+    - platform_adapter_boundary_is_documented
+
+future:
+  explicitly_reserved:
+    - Kotlin_only_native_application
+    - Android_application
+    - Swift_native_application
+    - JVM_service
+    - Ruby_service
+    - Rust_service
+    - Node_service
+    - desktop_application
+    - CLI
+    - embedded_or_constrained_runtime
+
+  architectural_rule: >
+    A new platform should require a new adapter, not a redesign of errors.v1,
+    the collector, or the conceptual reporter API.
+
+non_goals_for_first_library_release:
+  - full_observability_platform
+  - distributed_tracing_system
+  - analytics_platform
+  - browser_only_monitoring_product
+  - dependency_on_nilx_one
+  - dependency_on_any_child_organisation
