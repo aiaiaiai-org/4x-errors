@@ -1,0 +1,115 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+contract:
+  name: 4x-errors-browser-ingest
+  version: 1
+  status: implementation_ready
+  protocol: errors.v1
+
+scope:
+  purpose: >
+    Define a separate untrusted browser reporting boundary that can deliver errors
+    directly to 4x-errors without depending on the observed application's backend.
+  first_consumer: nilx-one/web
+  excludes:
+    - trusted_server_ingest_tokens
+    - direct_database_access
+    - supabase_client_access
+    - authentication_claims_based_on_origin
+
+endpoint:
+  method: POST
+  path: /v1/browser/events
+  body:
+    contract: protocol/errors.v1/error-event.schema.json
+  limits:
+    request_bytes_max: 524288
+    context_serialized_bytes_max: 16384
+    tags_max: 32
+    message_characters_max: 4096
+    full_text_characters_max: 32768
+
+trust_model:
+  browser_is_untrusted: true
+  permanent_secret_allowed: false
+  database_credentials_allowed: false
+  origin_header:
+    role: abuse_filter_signal_only
+    authentication: false
+    rule: >
+      The collector may reject origins not configured for the declared project,
+      but Origin is forgeable outside browsers and must never be treated as a secret
+      or proof of identity.
+  project:
+    public_identifier: true
+    rule: must_match_a_collector_configured_browser_project
+
+collector_controls:
+  required_before_production_traffic:
+    - exact_project_to_allowed_origin_mapping
+    - request_size_limit
+    - errors_v1_validation
+    - edge_or_collector_rate_limiting
+    - abuse_monitoring
+    - bounded_batch_size_when_batching_is_added
+  recommended:
+    - waf_or_equivalent_edge_protection
+    - per_project_and_per_source_rate_limits
+    - repeated_event_fingerprinting
+    - telemetry_storm_sampling_or_aggregation
+  rule: >
+    Browser reporting must not amplify an application outage into a collector outage.
+
+privacy:
+  rule: sanitise_before_persistence_and_prefer_sanitising_before_local_queueing
+  never_collect_merely_because_present_in_runtime_state:
+    - passwords
+    - authorization_headers
+    - cookies
+    - access_tokens
+    - refresh_tokens
+    - database_credentials
+    - arbitrary_request_bodies
+
+client_invariants:
+  - reporting_must_never_throw_or_reject_into_host_application_logic
+  - collector_unavailability_must_not_block_the_host_application
+  - app_backend_availability_must_not_be_required
+  - durable_local_queue_should_be_used_when_supported
+  - queue_must_be_bounded
+  - retries_must_be_bounded_with_backoff_and_jitter
+  - deduplication_is_required
+  - batching_is_required_before_high_volume_production_use
+  - recursion_guard_is_required
+  - no_permanent_secret_may_be_embedded_in_browser_code
+
+first_consumer:
+  project: nilx-one/web
+  runtime: browser
+  package_expectation: >
+    An installable JavaScript/TypeScript-compatible browser package exposes a small
+    fail-safe reporter API, captures explicit and global failures, persists queued
+    events locally, and sends directly to the independent collector.
+  definition_of_done:
+    - package_is_installable_by_nilx_one_web
+    - no_secret_configuration_is_required
+    - explicit_report_is_supported
+    - window_error_and_unhandled_rejection_capture_are_supported
+    - queued_events_survive_reload
+    - offline_events_retry_after_connectivity_returns
+    - collector_failure_is_non_fatal
+    - nilx_one_web_backend_is_not_in_the_delivery_path
+
+relationship_to_trusted_ingest:
+  trusted_endpoint: /v1/events
+  browser_endpoint: /v1/browser/events
+  shared:
+    - errors.v1
+    - event_validation
+    - error_events_persistence
+  separate:
+    - trust_model
+    - abuse_controls
+    - credentials
+  rule: browser_requests_must_never_accept_or_require_trusted_server_ingest_tokens
