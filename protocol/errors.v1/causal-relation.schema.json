@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiaiaiai.org/4x-errors/errors.v1/causal-relation.schema.json",
+  "$comment": "© 2026 aiaiaiai · aiaiaiai.org",
+  "title": "4x-errors errors.v1 causal relation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "relation_id",
+    "from_error_id",
+    "to_error_id",
+    "kind",
+    "confidence",
+    "evidence",
+    "created_at"
+  ],
+  "properties": {
+    "relation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "from_error_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:\\.[a-z0-9]+)+$",
+      "maxLength": 255
+    },
+    "to_error_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:\\.[a-z0-9]+)+$",
+      "maxLength": 255
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "root_cause_of",
+        "derivative_of",
+        "triggers",
+        "related_to"
+      ]
+    },
+    "confidence": {},
+    "evidence": {},
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
