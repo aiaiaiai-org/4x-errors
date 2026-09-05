@@ -1,6 +1,6 @@
 {
   "name": "@aiaiaiai/4x-errors-browser",
-  "version": "0.0.0-development",
+  "version": "0.1.0",
   "description": "Fail-safe browser reporter for the 4x-errors protocol.",
   "license": "Apache-2.0",
   "type": "module",
@@ -14,6 +14,9 @@
   "files": [
     "src"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "node --test test/*.test.js && tsc --project test/tsconfig.json --noEmit"
   },
