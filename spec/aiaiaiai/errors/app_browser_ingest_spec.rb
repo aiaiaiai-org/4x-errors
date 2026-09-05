@@ -20,6 +20,10 @@ RSpec.describe Aiaiaiai::Errors::App do
     post '/v1/browser/events', JSON.generate(payload), 'CONTENT_TYPE' => 'application/json'
   end
 
+  def response_body
+    JSON.parse(last_response.body)
+  end
+
   let(:recorded_events) { [] }
   let(:store) { instance_double(Aiaiaiai::Errors::EventStore) }
   let(:policy) do
@@ -31,6 +35,9 @@ RSpec.describe Aiaiaiai::Errors::App do
     path = File.expand_path('../../../protocol/errors.v1/fixtures/error-event.valid.json', __dir__)
     JSON.parse(File.read(path)).merge('project' => 'nilx-one/web')
   end
+  let(:second_event) { event.merge('event_id' => '22222222-2222-4222-8222-222222222222') }
+  let(:invalid_event) { second_event.merge('error_id' => 'invalid id') }
+  let(:other_project_event) { second_event.merge('project' => 'other/project') }
 
   before do
     allow(store).to receive(:insert) do |payload|
@@ -59,13 +66,11 @@ RSpec.describe Aiaiaiai::Errors::App do
   end
 
   it 'accepts a bounded browser event batch' do
-    second = event.merge('event_id' => '22222222-2222-4222-8222-222222222222')
-    post_browser_event([event, second])
-    response = JSON.parse(last_response.body)
+    post_browser_event([event, second_event])
 
     expect(last_response.status).to eq(201)
-    expect(response.fetch('event_ids')).to eq([event.fetch('event_id'), second.fetch('event_id')])
-    expect(recorded_events).to eq([event, second])
+    expect(response_body.fetch('event_ids')).to eq([event.fetch('event_id'), second_event.fetch('event_id')])
+    expect(recorded_events).to eq([event, second_event])
   end
 
   it 'rejects an empty batch before persistence' do
@@ -83,14 +88,10 @@ RSpec.describe Aiaiaiai::Errors::App do
   end
 
   it 'rejects the whole batch before persistence when one event is invalid' do
-    invalid = event.merge(
-      'event_id' => '22222222-2222-4222-8222-222222222222',
-      'error_id' => 'invalid id'
-    )
-    post_browser_event([event, invalid])
+    post_browser_event([event, invalid_event])
 
     expect(last_response.status).to eq(422)
-    expect(JSON.parse(last_response.body).fetch('error')).to eq('invalid_event')
+    expect(response_body.fetch('error')).to eq('invalid_event')
     expect(recorded_events).to be_empty
   end
 
@@ -99,16 +100,12 @@ RSpec.describe Aiaiaiai::Errors::App do
     post_browser_event(event)
 
     expect(last_response.status).to eq(403)
-    expect(JSON.parse(last_response.body)).to eq('error' => 'project_origin_not_allowed')
+    expect(response_body).to eq('error' => 'project_origin_not_allowed')
     expect(recorded_events).to be_empty
   end
 
   it 'rejects the whole batch when one project is not bound to the origin' do
-    other = event.merge(
-      'event_id' => '22222222-2222-4222-8222-222222222222',
-      'project' => 'other/project'
-    )
-    post_browser_event([event, other])
+    post_browser_event([event, other_project_event])
 
     expect(last_response.status).to eq(403)
     expect(recorded_events).to be_empty
