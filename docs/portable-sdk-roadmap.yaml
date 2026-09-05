@@ -337,11 +337,11 @@ implementation:
     completed:
       - ruby_runtime_bootstrap
       - errors_v1_error_event_contract
-      - causal_relation_contract
-    in_progress:
-      - postgres_test_harness
-    blocked_or_pending:
       - error_family_contract
+      - causal_relation_contract
+      - postgres_test_harness
+    next:
+      - error_event_persistence
 
   stages:
     - id: 01
