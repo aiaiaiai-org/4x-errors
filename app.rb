@@ -44,7 +44,8 @@ module Aiaiaiai
           event = parse_json(r, body)
           authorization = r.env['HTTP_AUTHORIZATION']
           project = event.is_a?(Hash) ? event['project'] : nil
-          r.halt json_error(401, 'unauthorized') unless self.class.authenticator.authenticated?(authorization, project)
+          authenticated = self.class.authenticator.authenticated?(authorization, project)
+          r.halt json_error(401, 'unauthorized') unless authenticated
 
           errors = EventValidator.new.validate(event)
           r.halt json_error(422, 'invalid_event', errors) unless errors.empty?
