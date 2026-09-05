@@ -8,13 +8,16 @@ require 'rspec'
 
 RSpec.describe 'errors.v1 error event contract' do
   let(:root) { File.expand_path('../..', __dir__) }
-  let(:schema) { JSON.parse(File.read(File.join(root, 'protocol/errors.v1/error-event.schema.json'))) }
-  let(:valid_event) do
-    JSON.parse(File.read(File.join(root, 'protocol/errors.v1/fixtures/error-event.valid.json')))
+  let(:schema_path) { File.join(root, 'protocol/errors.v1/error-event.schema.json') }
+  let(:valid_fixture_path) do
+    File.join(root, 'protocol/errors.v1/fixtures/error-event.valid.json')
   end
-  let(:invalid_event) do
-    JSON.parse(File.read(File.join(root, 'protocol/errors.v1/fixtures/error-event.invalid-unknown-field.json')))
+  let(:invalid_fixture_path) do
+    File.join(root, 'protocol/errors.v1/fixtures/error-event.invalid-unknown-field.json')
   end
+  let(:schema) { JSON.parse(File.read(schema_path)) }
+  let(:valid_event) { JSON.parse(File.read(valid_fixture_path)) }
+  let(:invalid_event) { JSON.parse(File.read(invalid_fixture_path)) }
 
   it 'pins the protocol version and rejects unknown top-level fields' do
     expect(schema.dig('properties', 'protocol_version', 'const')).to eq('errors.v1')
