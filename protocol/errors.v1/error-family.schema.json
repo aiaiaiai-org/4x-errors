@@ -3,6 +3,7 @@
   "$id": "https://aiaiaiai.org/4x-errors/errors.v1/error-family.schema.json",
   "$comment": "© 2026 aiaiaiai · aiaiaiai.org",
   "title": "4x-errors error family",
+  "description": "Semantic grouping of related errors. Family membership does not imply causality.",
   "type": "object",
   "additionalProperties": false,
   "required": [
