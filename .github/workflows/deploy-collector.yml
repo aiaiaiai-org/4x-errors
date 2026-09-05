@@ -1,0 +1,248 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+# SPDX-License-Identifier: Apache-2.0
+
+name: Deploy collector
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  IMAGE_REPOSITORY: ghcr.io/aiaiaiai-org/4x-errors
+
+concurrency:
+  group: deploy-4x-errors-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: Production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      BROWSER_INGEST_ORIGINS: ${{ secrets.BROWSER_INGEST_ORIGINS }}
+      INGEST_TOKEN_DIGESTS: ${{ secrets.INGEST_TOKEN_DIGESTS }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      SSH_PORT: ${{ vars.SSH_PORT || '22022' }}
+      DEPLOY_ROOT: ${{ vars.COLLECTOR_DEPLOYMENT_ROOT || '.local/share/aiaiaiai' }}
+      EDGE_NETWORK: ${{ vars.EDGE_NETWORK || 'nilx-edge' }}
+      PUBLIC_ORIGIN: ${{ vars.COLLECTOR_PUBLIC_ORIGIN }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Resolve immutable production release
+        run: |
+          set -Eeuo pipefail
+          test "$GITHUB_REF" = refs/heads/master
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$SSH_PORT" =~ ^[0-9]+$ ]]
+          (( SSH_PORT >= 1 && SSH_PORT <= 65535 ))
+          test -n "$DATABASE_URL"
+          test -n "$BROWSER_INGEST_ORIGINS"
+          test -n "$SSH_HOST"
+          test -n "$SSH_USER"
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$DEPLOY_ROOT"
+          test -n "$EDGE_NETWORK"
+          echo "COLLECTOR_IMAGE=${IMAGE_REPOSITORY}:sha-${GITHUB_SHA}" >>"$GITHUB_ENV"
+
+      - name: Wait for immutable collector package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          for attempt in $(seq 1 30); do
+            response="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/workflows/package-collector.yml/runs" -f per_page=100)"
+            state="$(jq -r --arg sha "$GITHUB_SHA" '
+              .workflow_runs
+              | map(select(.head_sha == $sha))
+              | first
+              | if . == null then "" else [.status, (.conclusion // ""), .html_url] | @tsv end
+            ' <<<"$response")"
+            if [ -z "$state" ]; then
+              sleep 10
+              continue
+            fi
+            IFS=$'\t' read -r status conclusion url <<<"$state"
+            if [ "$status" = completed ]; then
+              if [ "$conclusion" != success ]; then
+                echo "Collector package failed: $url" >&2
+                exit 1
+              fi
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Timed out waiting for collector package for $GITHUB_SHA" >&2
+          exit 1
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Authenticate to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch immutable collector package
+        run: |
+          set -Eeuo pipefail
+          docker buildx imagetools inspect "$COLLECTOR_IMAGE" >/dev/null
+          docker pull "$COLLECTOR_IMAGE"
+          docker save "$COLLECTOR_IMAGE" | gzip >"/tmp/4x-errors-${GITHUB_SHA}.tar.gz"
+
+      - name: Prepare protected runtime configuration
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          {
+            printf 'DATABASE_URL=%s\n' "$DATABASE_URL"
+            printf 'BROWSER_INGEST_ORIGINS=%s\n' "$BROWSER_INGEST_ORIGINS"
+            if [ -n "$INGEST_TOKEN_DIGESTS" ]; then
+              printf 'INGEST_TOKEN_DIGESTS=%s\n' "$INGEST_TOKEN_DIGESTS"
+            fi
+          } > /tmp/4x-errors.env
+          test -s /tmp/4x-errors.env
+
+      - name: Configure SSH
+        run: |
+          set -Eeuo pipefail
+          install -m 0700 -d "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" >"$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          ssh-keyscan -T 10 -p "$SSH_PORT" -H "$SSH_HOST" >"$HOME/.ssh/known_hosts"
+          test -s "$HOME/.ssh/known_hosts"
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$HOME/.ssh/id_ed25519" -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" true
+
+      - name: Upload release package
+        run: |
+          set -Eeuo pipefail
+          scp -o IdentitiesOnly=yes -i "$HOME/.ssh/id_ed25519" -P "$SSH_PORT" \
+            "/tmp/4x-errors-${GITHUB_SHA}.tar.gz" /tmp/4x-errors.env \
+            "$SSH_USER@$SSH_HOST:/tmp/"
+
+      - name: Activate collector with rollback
+        run: |
+          set -Eeuo pipefail
+          ssh -o IdentitiesOnly=yes -i "$HOME/.ssh/id_ed25519" -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "DEPLOY_ROOT='$DEPLOY_ROOT' EDGE_NETWORK='$EDGE_NETWORK' RELEASE_SHA='$GITHUB_SHA' COLLECTOR_IMAGE='$COLLECTOR_IMAGE' bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          umask 077
+
+          deploy_root="$DEPLOY_ROOT"
+          case "$deploy_root" in
+            /*) ;;
+            *) deploy_root="$HOME/$deploy_root" ;;
+          esac
+
+          deploy_path="$deploy_root/4x-errors"
+          release_dir="$deploy_path/releases/$RELEASE_SHA"
+          current_link="$deploy_path/current"
+          container_name="four-x-errors"
+          candidate_name="four-x-errors-candidate-${RELEASE_SHA:0:12}"
+          network_alias="errors-collector"
+          image_archive="/tmp/4x-errors-${RELEASE_SHA}.tar.gz"
+          runtime_env="/tmp/4x-errors.env"
+
+          mkdir -p "$release_dir"
+          test -s "$image_archive"
+          test -s "$runtime_env"
+          chmod 0600 "$runtime_env"
+          mv "$runtime_env" "$release_dir/runtime.env"
+          gunzip -c "$image_archive" | docker load >/dev/null
+          rm -f "$image_archive"
+          docker image inspect "$COLLECTOR_IMAGE" >/dev/null
+          docker network inspect "$EDGE_NETWORK" >/dev/null
+
+          previous_exists=false
+          if docker container inspect "$container_name" >/dev/null 2>&1; then
+            previous_exists=true
+            docker stop "$container_name" >/dev/null
+          fi
+          docker rm -f "$candidate_name" >/dev/null 2>&1 || true
+
+          rollback() {
+            docker rm -f "$candidate_name" >/dev/null 2>&1 || true
+            if [ "$previous_exists" = true ]; then
+              docker start "$container_name" >/dev/null 2>&1 || true
+            fi
+          }
+          trap rollback ERR
+
+          docker run --detach \
+            --name "$candidate_name" \
+            --restart unless-stopped \
+            --network "$EDGE_NETWORK" \
+            --network-alias "$network_alias" \
+            --env-file "$release_dir/runtime.env" \
+            "$COLLECTOR_IMAGE" >/dev/null
+
+          healthy=false
+          for attempt in $(seq 1 20); do
+            if docker exec "$candidate_name" ruby -rjson -rnet/http -e '
+              uri = URI("http://127.0.0.1:9292/health")
+              response = Net::HTTP.get_response(uri)
+              payload = JSON.parse(response.body)
+              exit(response.code == "200" && payload["status"] == "ok" ? 0 : 1)
+            ' >/dev/null 2>&1; then
+              healthy=true
+              break
+            fi
+            sleep 2
+          done
+          if [ "$healthy" != true ]; then
+            docker logs "$candidate_name" >&2 || true
+            false
+          fi
+
+          if [ "$previous_exists" = true ]; then
+            docker rm "$container_name" >/dev/null
+          fi
+          docker rename "$candidate_name" "$container_name"
+          printf '%s\n' "$COLLECTOR_IMAGE" >"$release_dir/.image"
+          ln -sfn "$release_dir" "$current_link"
+          trap - ERR
+
+          find "$deploy_path/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
+            | sort -nr | tail -n +4 | cut -d' ' -f2- | xargs -r rm -rf
+          REMOTE
+
+      - name: Verify public collector health
+        if: env.PUBLIC_ORIGIN != ''
+        run: |
+          set -Eeuo pipefail
+          origin="${PUBLIC_ORIGIN%/}"
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --show-error "$origin/health" | jq -e '.status == "ok"' >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Public collector health did not become ready at $origin/health" >&2
+          exit 1
+
+      - name: Remove transient secrets
+        if: always()
+        run: rm -f /tmp/4x-errors.env "$HOME/.ssh/id_ed25519"
+
+      - name: Publish deployment summary
+        if: always()
+        run: |
+          {
+            echo "### 4x-errors collector deployment"
+            echo
+            echo "- release: \`$GITHUB_SHA\`"
+            echo "- image: \`$COLLECTOR_IMAGE\`"
+            echo "- edge network: \`$EDGE_NETWORK\`"
+            echo "- public origin: \`${PUBLIC_ORIGIN:-not configured}\`"
+            echo "- result: \`${{ job.status }}\`"
+          } >>"$GITHUB_STEP_SUMMARY"
