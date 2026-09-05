@@ -4,7 +4,8 @@
 export interface BrowserReporterConfig {
   project: string;
   source: string;
-  transport: (event: ErrorEventV1) => void | Promise<void>;
+  collectorEndpoint?: string;
+  transport?: (event: ErrorEventV1) => void | Promise<void>;
   now?: () => Date;
   randomUUID?: () => string;
 }
@@ -40,6 +41,7 @@ export interface ErrorEventV1 {
 
 export interface BrowserReporter {
   report(input: ErrorReportInput): void;
+  flush(): Promise<void>;
 }
 
 export function createBrowserReporter(config?: Partial<BrowserReporterConfig>): BrowserReporter;
