@@ -31,6 +31,19 @@ RSpec.describe 'errors.v1 error event contract' do
     )
   end
 
+  it 'keeps stable identifiers lowercase and dot-separated' do
+    error_pattern = Regexp.new(schema.dig('properties', 'error_id', 'pattern'))
+    family_pattern = Regexp.new(schema.dig('properties', 'family_id', 'pattern'))
+
+    expect('ai.model.load.failed').to match(error_pattern)
+    expect('ai.model-load.failed').not_to match(error_pattern)
+    expect('family.ai.model.availability').to match(family_pattern)
+  end
+
+  it 'does not invent a closed severity vocabulary in errors.v1' do
+    expect(schema.dig('properties', 'severity')).not_to have_key('enum')
+  end
+
   it 'keeps payload bounds in the canonical schema' do
     expect(schema.dig('properties', 'message', 'maxLength')).to eq(4096)
     expect(schema.dig('properties', 'full_text', 'maxLength')).to eq(32_768)
