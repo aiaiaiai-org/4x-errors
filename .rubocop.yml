@@ -1,0 +1,16 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+plugins:
+  - rubocop-rspec
+
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 4.0
+  SuggestExtensions: false
+
+Layout/LineLength:
+  Max: 100
+
+RSpec/MultipleExpectations:
+  Max: 3
