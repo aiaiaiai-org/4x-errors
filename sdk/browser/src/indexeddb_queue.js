@@ -36,18 +36,20 @@ class IndexedDbEventQueue {
   async enqueue(event) {
     const database = await this.#database();
     const transaction = database.transaction(STORE_NAME, 'readwrite');
+    const done = transactionDone(transaction);
     const store = transaction.objectStore(STORE_NAME);
     store.add({ event_id: event.event_id, event });
     await trimOldest(store, this.#maxEntries);
-    await transactionDone(transaction);
+    await done;
   }
 
   async peek(limit = 50) {
     const database = await this.#database();
     const transaction = database.transaction(STORE_NAME, 'readonly');
+    const done = transactionDone(transaction);
     const store = transaction.objectStore(STORE_NAME);
     const events = await readOldest(store, positiveInteger(limit) ? limit : 50);
-    await transactionDone(transaction);
+    await done;
     return events;
   }
 
@@ -57,16 +59,18 @@ class IndexedDbEventQueue {
 
     const database = await this.#database();
     const transaction = database.transaction(STORE_NAME, 'readwrite');
+    const done = transactionDone(transaction);
     const store = transaction.objectStore(STORE_NAME);
     await deleteByEventIds(store, ids);
-    await transactionDone(transaction);
+    await done;
   }
 
   async size() {
     const database = await this.#database();
     const transaction = database.transaction(STORE_NAME, 'readonly');
+    const done = transactionDone(transaction);
     const count = await requestResult(transaction.objectStore(STORE_NAME).count());
-    await transactionDone(transaction);
+    await done;
     return count;
   }
 
