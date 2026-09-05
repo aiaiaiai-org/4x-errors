@@ -62,6 +62,8 @@ async function drainQueue(queue, send, batchSize, maxRequestBytes, retry, circui
   if (queued.length === 0) return;
 
   const batch = selectRequestBatch(queued, maxRequestBytes);
+  if (batch.length === 0) return;
+
   const delivered = await sendWithRetry(send, batch, retry);
   circuit.record(delivered);
   if (!delivered) return;
@@ -73,9 +75,8 @@ function selectRequestBatch(events, maxRequestBytes) {
   const batch = [];
   for (const event of events) {
     const candidate = [...batch, event];
-    if (batch.length > 0 && serializedBytes(candidate) > maxRequestBytes) break;
+    if (serializedBytes(candidate) > maxRequestBytes) break;
     batch.push(event);
-    if (serializedBytes(batch) >= maxRequestBytes) break;
   }
   return batch;
 }
