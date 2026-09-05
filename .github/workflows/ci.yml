@@ -1,0 +1,35 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+# Repository license is not selected yet; no SPDX identifier is asserted here.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  ruby:
+    name: Ruby correctness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+      - name: Check formatting and lint
+        run: bundle exec rubocop
+      - name: Run tests
+        run: bundle exec rspec
+
+  docker:
+    name: Container build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build --tag 4x-errors:ci .
