@@ -36,30 +36,38 @@ module Aiaiaiai
           }
         end
 
-        r.post 'v1', 'events' do
-          body = r.body.read(MAX_REQUEST_BYTES + 1)
-          r.halt json_error(413, 'request_too_large') if body.bytesize > MAX_REQUEST_BYTES
-          r.halt json_error(503, 'collector_unconfigured') unless collector_configured?
+        r.post('v1', 'events') { ingest_event(r) }
+      end
 
-          event = parse_json(r, body)
-          authorization = r.env['HTTP_AUTHORIZATION']
-          project = event.is_a?(Hash) ? event['project'] : nil
-          authenticated = self.class.authenticator.authenticated?(authorization, project)
-          r.halt json_error(401, 'unauthorized') unless authenticated
+      def ingest_event(request)
+        body = request.body.read(MAX_REQUEST_BYTES + 1)
+        request.halt json_error(413, 'request_too_large') if body.bytesize > MAX_REQUEST_BYTES
+        request.halt json_error(503, 'collector_unconfigured') unless collector_configured?
 
-          errors = EventValidator.new.validate(event)
-          r.halt json_error(422, 'invalid_event', errors) unless errors.empty?
-
-          event_id = self.class.event_store.insert(event)
-          response.status = 201
-          { event_id: event_id }
-        end
+        event = parse_json(request, body)
+        authorize_event(request, event)
+        validate_event(request, event)
+        event_id = self.class.event_store.insert(event)
+        response.status = 201
+        { event_id: event_id }
       end
 
       def parse_json(request, body)
         JSON.parse(body)
       rescue JSON::ParserError
         request.halt json_error(400, 'invalid_json')
+      end
+
+      def authorize_event(request, event)
+        authorization = request.env['HTTP_AUTHORIZATION']
+        project = event.is_a?(Hash) ? event['project'] : nil
+        authenticated = self.class.authenticator.authenticated?(authorization, project)
+        request.halt json_error(401, 'unauthorized') unless authenticated
+      end
+
+      def validate_event(request, event)
+        errors = EventValidator.new.validate(event)
+        request.halt json_error(422, 'invalid_event', errors) unless errors.empty?
       end
 
       def collector_configured?
