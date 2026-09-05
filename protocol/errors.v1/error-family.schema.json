@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiaiaiai.org/4x-errors/errors.v1/error-family.schema.json",
+  "$comment": "© 2026 aiaiaiai · aiaiaiai.org",
+  "title": "4x-errors error family",
+  "description": "Semantic grouping of related errors. Family membership does not imply causality.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "family_id",
+    "title",
+    "description",
+    "projects",
+    "status"
+  ],
+  "properties": {
+    "family_id": {
+      "type": "string",
+      "pattern": "^family\\.[a-z0-9]+(?:\\.[a-z0-9]+)+$",
+      "maxLength": 255
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "projects": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 255
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["open", "investigating", "known", "resolved"]
+    }
+  }
+}

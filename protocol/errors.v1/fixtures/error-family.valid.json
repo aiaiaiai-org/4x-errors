@@ -1,0 +1,12 @@
+{
+  "family_id": "family.ai.model.availability",
+  "title": "AI model availability",
+  "description": "Failures that prevent an AI model from becoming available to a consumer.",
+  "projects": [
+    "aiaiaiai-org/artificial-intelligence",
+    "nilx-one/ai",
+    "nilx-one/web",
+    "nilx-one/core"
+  ],
+  "status": "open"
+}
