@@ -61,24 +61,32 @@ RSpec.describe Aiaiaiai::Errors::App do
   it 'accepts a bounded browser event batch' do
     second = event.merge('event_id' => '22222222-2222-4222-8222-222222222222')
     post_browser_event([event, second])
+    response = JSON.parse(last_response.body)
 
     expect(last_response.status).to eq(201)
-    expect(JSON.parse(last_response.body)).to eq('event_ids' => [event.fetch('event_id'), second.fetch('event_id')])
+    expect(response.fetch('event_ids')).to eq([event.fetch('event_id'), second.fetch('event_id')])
     expect(recorded_events).to eq([event, second])
   end
 
-  it 'rejects empty and oversized batches before persistence' do
+  it 'rejects an empty batch before persistence' do
     post_browser_event([])
+
     expect(last_response.status).to eq(422)
     expect(recorded_events).to be_empty
+  end
 
+  it 'rejects an oversized batch before persistence' do
     post_browser_event(Array.new(51) { event })
+
     expect(last_response.status).to eq(422)
     expect(recorded_events).to be_empty
   end
 
   it 'rejects the whole batch before persistence when one event is invalid' do
-    invalid = event.merge('event_id' => '22222222-2222-4222-8222-222222222222', 'error_id' => 'invalid id')
+    invalid = event.merge(
+      'event_id' => '22222222-2222-4222-8222-222222222222',
+      'error_id' => 'invalid id'
+    )
     post_browser_event([event, invalid])
 
     expect(last_response.status).to eq(422)
@@ -96,7 +104,10 @@ RSpec.describe Aiaiaiai::Errors::App do
   end
 
   it 'rejects the whole batch when one project is not bound to the origin' do
-    other = event.merge('event_id' => '22222222-2222-4222-8222-222222222222', 'project' => 'other/project')
+    other = event.merge(
+      'event_id' => '22222222-2222-4222-8222-222222222222',
+      'project' => 'other/project'
+    )
     post_browser_event([event, other])
 
     expect(last_response.status).to eq(403)
