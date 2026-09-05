@@ -28,6 +28,16 @@ RSpec.describe Aiaiaiai::Errors::App do
     event.merge('event_id' => '22222222-2222-4222-8222-222222222222')
   end
 
+  def third_event
+    event.merge('event_id' => '33333333-3333-4333-8333-333333333333')
+  end
+
+  def exhaust_browser_rate_limit
+    limiter = Aiaiaiai::Errors::BrowserRateLimiter.new(events_per_window: 2)
+    described_class.browser_rate_limiter = limiter
+    post_browser_event([event, second_event])
+  end
+
   def invalid_event
     second_event.merge('error_id' => 'invalid id')
   end
@@ -59,11 +69,13 @@ RSpec.describe Aiaiaiai::Errors::App do
     end
     described_class.event_store = store
     described_class.browser_policy = policy
+    described_class.browser_rate_limiter = Aiaiaiai::Errors::BrowserRateLimiter.new
   end
 
   after do
     described_class.event_store = nil
     described_class.browser_policy = nil
+    described_class.browser_rate_limiter = nil
   end
 
   it 'accepts an allowed zero-secret browser event' do
@@ -80,6 +92,15 @@ RSpec.describe Aiaiaiai::Errors::App do
 
     expect(last_response.status).to eq(201)
     expect(response_body.fetch('event_ids')).to eq(expected_ids)
+    expect(recorded_events).to eq([event, second_event])
+  end
+
+  it 'counts batch events against the browser rate limit' do
+    exhaust_browser_rate_limit
+    post_browser_event(third_event)
+
+    expect([last_response.status, response_body]).to eq([429, { 'error' => 'rate_limited' }])
+    expect(last_response.headers.fetch('Retry-After').to_i).to be_positive
     expect(recorded_events).to eq([event, second_event])
   end
 
