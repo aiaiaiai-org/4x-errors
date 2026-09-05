@@ -37,6 +37,10 @@ RSpec.describe Aiaiaiai::Errors::App do
       recorded_events << payload
       payload.fetch('event_id')
     end
+    allow(store).to receive(:insert_batch) do |payloads|
+      recorded_events.concat(payloads)
+      payloads.map { |payload| payload.fetch('event_id') }
+    end
     described_class.event_store = store
     described_class.browser_policy = policy
   end
@@ -54,12 +58,48 @@ RSpec.describe Aiaiaiai::Errors::App do
     expect(recorded_events).to eq([event])
   end
 
+  it 'accepts a bounded browser event batch' do
+    second = event.merge('event_id' => '22222222-2222-4222-8222-222222222222')
+    post_browser_event([event, second])
+
+    expect(last_response.status).to eq(201)
+    expect(JSON.parse(last_response.body)).to eq('event_ids' => [event.fetch('event_id'), second.fetch('event_id')])
+    expect(recorded_events).to eq([event, second])
+  end
+
+  it 'rejects empty and oversized batches before persistence' do
+    post_browser_event([])
+    expect(last_response.status).to eq(422)
+    expect(recorded_events).to be_empty
+
+    post_browser_event(Array.new(51) { event })
+    expect(last_response.status).to eq(422)
+    expect(recorded_events).to be_empty
+  end
+
+  it 'rejects the whole batch before persistence when one event is invalid' do
+    invalid = event.merge('event_id' => '22222222-2222-4222-8222-222222222222', 'error_id' => 'invalid id')
+    post_browser_event([event, invalid])
+
+    expect(last_response.status).to eq(422)
+    expect(JSON.parse(last_response.body).fetch('error')).to eq('invalid_event')
+    expect(recorded_events).to be_empty
+  end
+
   it 'rejects a project that is not bound to the request origin' do
     event['project'] = 'other/project'
     post_browser_event(event)
 
     expect(last_response.status).to eq(403)
     expect(JSON.parse(last_response.body)).to eq('error' => 'project_origin_not_allowed')
+    expect(recorded_events).to be_empty
+  end
+
+  it 'rejects the whole batch when one project is not bound to the origin' do
+    other = event.merge('event_id' => '22222222-2222-4222-8222-222222222222', 'project' => 'other/project')
+    post_browser_event([event, other])
+
+    expect(last_response.status).to eq(403)
     expect(recorded_events).to be_empty
   end
 
