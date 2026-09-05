@@ -30,8 +30,8 @@ RSpec.describe Sequel::Migrator do
     }
   end
   let(:expected_columns) do
-    %i[event_id protocol_version error_id project source severity message full_text observed_at context
-       tags family_id caused_by_event_id correlation_id received_at]
+    %i[event_id protocol_version error_id project source severity message full_text
+       observed_at context tags family_id caused_by_event_id correlation_id received_at]
   end
 
   before do
