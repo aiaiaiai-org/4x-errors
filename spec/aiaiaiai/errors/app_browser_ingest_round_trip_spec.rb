@@ -30,6 +30,13 @@ RSpec.describe Aiaiaiai::Errors::App do
     described_class.app
   end
 
+  around do |example|
+    previous_config = app_config
+    example.run
+  ensure
+    restore_app_config(previous_config)
+  end
+
   before do
     Sequel::Migrator.run(database, File.expand_path('../../../db/migrations', __dir__))
     database[:error_events].where(event_id: event.fetch('event_id')).delete
@@ -44,13 +51,10 @@ RSpec.describe Aiaiaiai::Errors::App do
     if database.table_exists?(:error_events)
       database[:error_events].where(event_id: event.fetch('event_id')).delete
     end
-    described_class.event_store = nil
-    described_class.browser_policy = nil
-    described_class.browser_rate_limiter = nil
     database.disconnect
   end
 
-  it 'persists a zero-secret browser event to PostgreSQL and returns its identifier' do
+  it 'persists a browser event without credentials to PostgreSQL and returns its identifier' do
     post_event(event, origin: 'https://smoke.example')
 
     expect(last_response.status).to eq(201)
@@ -71,6 +75,16 @@ RSpec.describe Aiaiaiai::Errors::App do
 
     expect(last_response.status).to eq(422)
     expect(database[:error_events].where(event_id: event.fetch('event_id')).count).to eq(0)
+  end
+
+  def app_config
+    %i[event_store browser_policy browser_rate_limiter].to_h do |name|
+      [name, described_class.public_send(name)]
+    end
+  end
+
+  def restore_app_config(config)
+    config.each { |name, value| described_class.public_send("#{name}=", value) }
   end
 
   def persisted_event
