@@ -18,8 +18,12 @@ RSpec.describe Aiaiaiai::Errors::App do
     end
   end
   let(:event) do
-    fixture = File.expand_path('../../../protocol/errors.v1/fixtures/error-event.valid.json', __dir__)
-    JSON.parse(File.read(fixture)).merge('event_id' => 'd9efad3d-aad9-44d5-8126-b0b39f000001', 'project' => '4x-errors/smoke')
+    fixture = File.expand_path('../../../protocol/errors.v1/fixtures/error-event.valid.json',
+                               __dir__)
+    JSON.parse(File.read(fixture)).merge(
+      'event_id' => 'd9efad3d-aad9-44d5-8126-b0b39f000001',
+      'project' => '4x-errors/smoke'
+    )
   end
 
   def app
