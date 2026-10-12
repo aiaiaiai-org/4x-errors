@@ -18,33 +18,31 @@ RSpec.describe Aiaiaiai::Errors::App do
     end
   end
   let(:event) do
-    JSON.parse(
-      File.read(File.expand_path('../../../protocol/errors.v1/fixtures/' \
-                                     'error-event.valid.json', __dir__))
-    ).merge('event_id' => 'd9efad3d-aad9-44d5-8126-b0b39f000001', 'project' => '4x-errors/smoke')
+    fixture = File.expand_path('../../../protocol/errors.v1/fixtures/error-event.valid.json', __dir__)
+    JSON.parse(File.read(fixture)).merge('event_id' => 'd9efad3d-aad9-44d5-8126-b0b39f000001', 'project' => '4x-errors/smoke')
   end
 
   def app
-    Aiaiaiai::Errors::App.app
+    described_class.app
   end
 
   before do
     Sequel::Migrator.run(database, File.expand_path('../../../db/migrations', __dir__))
     database[:error_events].where(event_id: event.fetch('event_id')).delete
-    Aiaiaiai::Errors::App.event_store = Aiaiaiai::Errors::EventStore.new(database)
-    Aiaiaiai::Errors::App.browser_policy = Aiaiaiai::Errors::BrowserIngestPolicy.new(
+    described_class.event_store = Aiaiaiai::Errors::EventStore.new(database)
+    described_class.browser_policy = Aiaiaiai::Errors::BrowserIngestPolicy.new(
       '4x-errors/smoke' => ['https://smoke.example']
     )
-    Aiaiaiai::Errors::App.browser_rate_limiter = Aiaiaiai::Errors::BrowserRateLimiter.new
+    described_class.browser_rate_limiter = Aiaiaiai::Errors::BrowserRateLimiter.new
   end
 
   after do
     if database.table_exists?(:error_events)
       database[:error_events].where(event_id: event.fetch('event_id')).delete
     end
-    Aiaiaiai::Errors::App.event_store = nil
-    Aiaiaiai::Errors::App.browser_policy = nil
-    Aiaiaiai::Errors::App.browser_rate_limiter = nil
+    described_class.event_store = nil
+    described_class.browser_policy = nil
+    described_class.browser_rate_limiter = nil
     database.disconnect
   end
 
