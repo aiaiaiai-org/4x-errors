@@ -9,15 +9,18 @@ require 'sequel'
 require 'sequel/extensions/migration'
 require_relative '../../../app'
 
-RSpec.describe 'Browser ingest PostgreSQL round trip' do
+RSpec.describe Aiaiaiai::Errors::App do
   include Rack::Test::Methods
 
   let(:database) do
-    Sequel.connect(ENV.fetch('TEST_DATABASE_URL')).tap { |connection| connection.extension :pg_json }
+    Sequel.connect(ENV.fetch('TEST_DATABASE_URL')).tap do |connection|
+      connection.extension :pg_json
+    end
   end
   let(:event) do
     JSON.parse(
-      File.read(File.expand_path('../../../protocol/errors.v1/fixtures/error-event.valid.json', __dir__))
+      File.read(File.expand_path('../../../protocol/errors.v1/fixtures/' \
+                                     'error-event.valid.json', __dir__))
     ).merge('event_id' => 'd9efad3d-aad9-44d5-8126-b0b39f000001', 'project' => '4x-errors/smoke')
   end
 
@@ -36,7 +39,9 @@ RSpec.describe 'Browser ingest PostgreSQL round trip' do
   end
 
   after do
-    database[:error_events].where(event_id: event.fetch('event_id')).delete if database.table_exists?(:error_events)
+    if database.table_exists?(:error_events)
+      database[:error_events].where(event_id: event.fetch('event_id')).delete
+    end
     Aiaiaiai::Errors::App.event_store = nil
     Aiaiaiai::Errors::App.browser_policy = nil
     Aiaiaiai::Errors::App.browser_rate_limiter = nil
@@ -48,9 +53,8 @@ RSpec.describe 'Browser ingest PostgreSQL round trip' do
 
     expect(last_response.status).to eq(201)
     expect(JSON.parse(last_response.body)).to eq('event_id' => event.fetch('event_id'))
-    row = database[:error_events].where(event_id: event.fetch('event_id')).first
-    expect(row).to include(project: '4x-errors/smoke', error_id: 'ai.model.load.failed')
-    expect(row.fetch(:received_at)).not_to be_nil
+    expect(persisted_event).to include(project: '4x-errors/smoke', error_id: 'ai.model.load.failed',
+                                       received_at: be_a(Time))
   end
 
   it 'rejects a disallowed origin without writing a row' do
@@ -65,6 +69,10 @@ RSpec.describe 'Browser ingest PostgreSQL round trip' do
 
     expect(last_response.status).to eq(422)
     expect(database[:error_events].where(event_id: event.fetch('event_id')).count).to eq(0)
+  end
+
+  def persisted_event
+    database[:error_events].where(event_id: event.fetch('event_id')).first
   end
 
   def post_event(payload, origin:)
