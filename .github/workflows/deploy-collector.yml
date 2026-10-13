@@ -5,6 +5,11 @@ name: Deploy collector
 
 on:
   workflow_dispatch:
+    inputs:
+      image_sha:
+        description: 'Verified master commit with an existing collector image (empty: current commit)'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -33,25 +38,32 @@ jobs:
       DEPLOY_ROOT: ${{ vars.COLLECTOR_DEPLOYMENT_ROOT || '.local/share/aiaiaiai' }}
       EDGE_NETWORK: ${{ vars.EDGE_NETWORK || 'nilx-edge' }}
       PUBLIC_ORIGIN: ${{ vars.COLLECTOR_PUBLIC_ORIGIN }}
+      REQUESTED_IMAGE_SHA: ${{ inputs.image_sha }}
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Resolve immutable production release
         run: |
           set -Eeuo pipefail
           test "$GITHUB_REF" = refs/heads/master
-          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          release_sha="${REQUESTED_IMAGE_SHA:-$GITHUB_SHA}"
+          [[ "$release_sha" =~ ^[0-9a-f]{40}$ ]]
+          git merge-base --is-ancestor "$release_sha" "$GITHUB_SHA"
+          echo "RELEASE_SHA=$release_sha" >>"$GITHUB_ENV"
           [[ "$SSH_PORT" =~ ^[0-9]+$ ]]
           (( SSH_PORT >= 1 && SSH_PORT <= 65535 ))
-          test -n "$DATABASE_URL"
-          test -n "$BROWSER_INGEST_ORIGINS"
-          test -n "$SSH_HOST"
-          test -n "$SSH_USER"
-          test -n "$SSH_PRIVATE_KEY"
+          for required in DATABASE_URL BROWSER_INGEST_ORIGINS SSH_HOST SSH_USER SSH_PRIVATE_KEY; do
+            if [ -z "${!required}" ]; then
+              echo "::error::Missing Production configuration: $required"
+              exit 1
+            fi
+          done
           test -n "$DEPLOY_ROOT"
           test -n "$EDGE_NETWORK"
-          echo "COLLECTOR_IMAGE=${IMAGE_REPOSITORY}:sha-${GITHUB_SHA}" >>"$GITHUB_ENV"
+          echo "COLLECTOR_IMAGE=${IMAGE_REPOSITORY}:sha-${release_sha}" >>"$GITHUB_ENV"
 
       - name: Wait for immutable collector package
         env:
@@ -60,7 +72,7 @@ jobs:
           set -Eeuo pipefail
           for attempt in $(seq 1 30); do
             response="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/workflows/package-collector.yml/runs" -f per_page=100)"
-            state="$(jq -r --arg sha "$GITHUB_SHA" '
+            state="$(jq -r --arg sha "$RELEASE_SHA" '
               .workflow_runs
               | map(select(.head_sha == $sha))
               | first
@@ -80,7 +92,7 @@ jobs:
             fi
             sleep 10
           done
-          echo "Timed out waiting for collector package for $GITHUB_SHA" >&2
+          echo "Timed out waiting for collector package for $RELEASE_SHA" >&2
           exit 1
 
       - uses: docker/setup-buildx-action@v3
@@ -97,7 +109,7 @@ jobs:
           set -Eeuo pipefail
           docker buildx imagetools inspect "$COLLECTOR_IMAGE" >/dev/null
           docker pull "$COLLECTOR_IMAGE"
-          docker save "$COLLECTOR_IMAGE" | gzip >"/tmp/4x-errors-${GITHUB_SHA}.tar.gz"
+          docker save "$COLLECTOR_IMAGE" | gzip >"/tmp/4x-errors-${RELEASE_SHA}.tar.gz"
 
       - name: Prepare protected runtime configuration
         run: |
@@ -126,7 +138,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           scp -o IdentitiesOnly=yes -i "$HOME/.ssh/id_ed25519" -P "$SSH_PORT" \
-            "/tmp/4x-errors-${GITHUB_SHA}.tar.gz" /tmp/4x-errors.env \
+            "/tmp/4x-errors-${RELEASE_SHA}.tar.gz" /tmp/4x-errors.env \
             "$SSH_USER@$SSH_HOST:/tmp/"
 
       - name: Activate collector with rollback
@@ -134,7 +146,7 @@ jobs:
           set -Eeuo pipefail
           ssh -o IdentitiesOnly=yes -i "$HOME/.ssh/id_ed25519" -p "$SSH_PORT" \
             "$SSH_USER@$SSH_HOST" \
-            "DEPLOY_ROOT='$DEPLOY_ROOT' EDGE_NETWORK='$EDGE_NETWORK' RELEASE_SHA='$GITHUB_SHA' COLLECTOR_IMAGE='$COLLECTOR_IMAGE' bash -s" <<'REMOTE'
+            "DEPLOY_ROOT='$DEPLOY_ROOT' EDGE_NETWORK='$EDGE_NETWORK' RELEASE_SHA='$RELEASE_SHA' COLLECTOR_IMAGE='$COLLECTOR_IMAGE' bash -s" <<'REMOTE'
           set -Eeuo pipefail
           umask 077
 
@@ -189,10 +201,10 @@ jobs:
           healthy=false
           for attempt in $(seq 1 20); do
             if docker exec "$candidate_name" ruby -rjson -rnet/http -e '
-              uri = URI("http://127.0.0.1:9292/health")
+              uri = URI("http://127.0.0.1:9292/ready")
               response = Net::HTTP.get_response(uri)
               payload = JSON.parse(response.body)
-              exit(response.code == "200" && payload["status"] == "ok" ? 0 : 1)
+              exit(response.code == "200" && payload["status"] == "ready" ? 0 : 1)
             ' >/dev/null 2>&1; then
               healthy=true
               break
@@ -222,12 +234,12 @@ jobs:
           set -Eeuo pipefail
           origin="${PUBLIC_ORIGIN%/}"
           for attempt in $(seq 1 12); do
-            if curl --fail --silent --show-error "$origin/health" | jq -e '.status == "ok"' >/dev/null; then
+            if curl --fail --silent --show-error "$origin/ready" | jq -e '.status == "ready"' >/dev/null; then
               exit 0
             fi
             sleep 5
           done
-          echo "Public collector health did not become ready at $origin/health" >&2
+          echo "Public collector health did not become ready at $origin/ready" >&2
           exit 1
 
       - name: Remove transient secrets
@@ -240,7 +252,7 @@ jobs:
           {
             echo "### 4x-errors collector deployment"
             echo
-            echo "- release: \`$GITHUB_SHA\`"
+            echo "- release: \`$RELEASE_SHA\`"
             echo "- image: \`$COLLECTOR_IMAGE\`"
             echo "- edge network: \`$EDGE_NETWORK\`"
             echo "- public origin: \`${PUBLIC_ORIGIN:-not configured}\`"

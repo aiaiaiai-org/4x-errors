@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # © 2026 aiaiaiai · aiaiaiai.org
-# Repository license is not selected yet; no SPDX identifier is asserted here.
+# SPDX-License-Identifier: Apache-2.0
 
 require 'json'
 require 'roda'
@@ -39,6 +39,12 @@ module Aiaiaiai
           {
             status: 'ok'
           }
+        end
+
+        r.get 'ready' do
+          ready = browser_collector_configured? && self.class.event_store.ready?
+          response.status = ready ? 200 : 503
+          { status: ready ? 'ready' : 'unavailable' }
         end
 
         r.post('v1', 'events') { ingest_event(r) }
