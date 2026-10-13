@@ -1,8 +1,8 @@
 // © 2026 aiaiaiai · aiaiaiai.org
 // SPDX-License-Identifier: Apache-2.0
 
-const WINDOW_ERROR_ID = 'browser.runtime.unhandled_error';
-const REJECTION_ERROR_ID = 'browser.promise.unhandled_rejection';
+const WINDOW_ERROR_ID = 'browser.runtime.unhandled.error';
+const REJECTION_ERROR_ID = 'browser.promise.unhandled.rejection';
 
 export function attachGlobalErrorCapture({ reporter, target = globalThis }) {
   if (!reporter || typeof reporter.report !== 'function') return () => {};
