@@ -57,8 +57,19 @@ async function submitEvent(queue, send, event, batchSize, maxRequestBytes, retry
     return;
   }
 
-  await queue.enqueue(event);
-  await drainOnce(queue, send, batchSize, maxRequestBytes, retry, circuit);
+  try {
+    await queue.enqueue(event);
+  } catch {
+    // Storage denial must not disable reporting while the network is available.
+    await safeSend(send, event);
+    return;
+  }
+  try {
+    await drainOnce(queue, send, batchSize, maxRequestBytes, retry, circuit);
+  } catch {
+    // A queued copy may remain; idempotent ingest makes a later retry safe.
+    await safeSend(send, event);
+  }
 }
 
 async function drainBacklog(queue, send, batchSize, maxRequestBytes, retry, circuit) {
