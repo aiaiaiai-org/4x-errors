@@ -41,10 +41,9 @@ module Aiaiaiai
       # The collector uses a trusted writer that bypasses RLS; browsers never do.
       def ready?
         @database[:error_events].select(*PERSISTED_FIELDS.map(&:to_sym), :received_at).limit(0).all
-        @database.get(Sequel.lit(
-          "has_table_privilege(current_user, 'error_events', 'INSERT') " \
-          "AND NOT row_security_active('error_events')"
-        ))
+        sql = "has_table_privilege(current_user, 'error_events', 'INSERT') " \
+              "AND NOT row_security_active('error_events')"
+        @database.get(Sequel.lit(sql))
       rescue Sequel::Error
         false
       end
