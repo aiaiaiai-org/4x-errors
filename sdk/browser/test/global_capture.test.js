@@ -1,8 +1,9 @@
 // © 2026 aiaiaiai · aiaiaiai.org
-// Repository license is not selected yet; no SPDX identifier is asserted here.
+// SPDX-License-Identifier: Apache-2.0
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createBrowserReporter } from '../src/index.js';
 import { attachGlobalErrorCapture } from '../src/global_capture.js';
 
 function runtimeTarget() {
@@ -31,7 +32,7 @@ test('captures window errors with stable semantic identifiers', () => {
   });
 
   assert.equal(reports.length, 1);
-  assert.equal(reports[0].errorId, 'browser.runtime.unhandled_error');
+  assert.equal(reports[0].errorId, 'browser.runtime.unhandled.error');
   assert.equal(reports[0].message, 'boom');
   assert.deepEqual(reports[0].context, { filename: '/app.js', line: 12, column: 7 });
 
@@ -47,7 +48,7 @@ test('captures unhandled promise rejections', () => {
   target.dispatch('unhandledrejection', { reason: new Error('rejected') });
 
   assert.equal(reports.length, 1);
-  assert.equal(reports[0].errorId, 'browser.promise.unhandled_rejection');
+  assert.equal(reports[0].errorId, 'browser.promise.unhandled.rejection');
   assert.equal(reports[0].message, 'rejected');
 });
 
@@ -74,4 +75,24 @@ test('capture failures never escape into host runtime', () => {
 
   assert.doesNotThrow(() => target.dispatch('error', { message: 'boom' }));
   assert.doesNotThrow(() => target.dispatch('unhandledrejection', { reason: 'rejected' }));
+});
+
+
+test('global capture reaches transport through the real reporter validation', async () => {
+  const target = runtimeTarget();
+  const events = [];
+  const reporter = createBrowserReporter({
+    project: 'nilx-one/web',
+    source: 'browser',
+    runtimeTarget: target,
+    transport: (event) => events.push(event)
+  });
+  target.dispatch('error', { message: 'window failure' });
+  target.dispatch('unhandledrejection', { reason: new Error('promise failure') });
+  await reporter.flush();
+  assert.deepEqual(events.map((event) => event.error_id), [
+    'browser.runtime.unhandled.error',
+    'browser.promise.unhandled.rejection'
+  ]);
+  reporter.dispose();
 });
