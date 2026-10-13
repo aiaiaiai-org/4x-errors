@@ -10,7 +10,7 @@ import { createQueuedDelivery } from '../src/queued_delivery.js';
 const EVENT = {
   protocol_version: 'errors.v1',
   event_id: '11111111-1111-4111-8111-111111111111',
-  error_id: 'browser.runtime.unhandled_error',
+  error_id: 'browser.runtime.unhandled.error',
   project: 'nilx-one/web',
   source: 'browser',
   severity: 'error',
