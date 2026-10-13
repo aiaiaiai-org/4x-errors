@@ -54,6 +54,28 @@ RSpec.describe Aiaiaiai::Errors::App do
     database.disconnect
   end
 
+  it 'reports readiness only when the browser collector can use its database' do
+    get '/ready'
+
+    expect(last_response.status).to eq(200)
+    expect(JSON.parse(last_response.body)).to eq('status' => 'ready')
+  end
+
+  it 'reports unavailable when storage is not configured' do
+    described_class.event_store = nil
+    get '/ready'
+
+    expect(last_response.status).to eq(503)
+  end
+
+  it 'reports unavailable when the event table is missing' do
+    database.transaction(rollback: :always) do
+      database.rename_table(:error_events, :unavailable_error_events)
+      get '/ready'
+      expect(last_response.status).to eq(503)
+    end
+  end
+
   it 'persists a browser event without credentials to PostgreSQL and returns its identifier' do
     post_event(event, origin: 'https://smoke.example')
 

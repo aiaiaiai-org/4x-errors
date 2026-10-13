@@ -38,6 +38,17 @@ module Aiaiaiai
         events.map { |event| event.fetch('event_id') }
       end
 
+      # The collector uses a trusted writer that bypasses RLS; browsers never do.
+      def ready?
+        fields = [*PERSISTED_FIELDS.map(&:to_sym), :received_at]
+        @database[:error_events].select(*fields).where(Sequel.lit('FALSE')).all
+        sql = "has_table_privilege(current_user, 'error_events', 'INSERT') " \
+              "AND NOT row_security_active('error_events')"
+        @database.get(Sequel.lit(sql))
+      rescue Sequel::Error
+        false
+      end
+
       def close
         @database.disconnect if @owns_database
       end
