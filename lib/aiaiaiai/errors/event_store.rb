@@ -33,7 +33,7 @@ module Aiaiaiai
 
       def insert_batch(events)
         @database.transaction do
-          events.each { |event| @database[:error_events].insert_conflict(target: :event_id).insert(attributes_for(event)) }
+          events.each { |event| insert(event) }
         end
         events.map { |event| event.fetch('event_id') }
       end

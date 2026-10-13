@@ -87,15 +87,21 @@ RSpec.describe Aiaiaiai::Errors::App do
   end
 
   it 'persists new events in a batch containing repeated identifiers' do
+    post_mixed_batch
+
+    expect(last_response.status).to eq(201)
+    expect(JSON.parse(last_response.body).fetch('event_ids')).to eq(mixed_ids)
+    expect(database[:error_events].where(event_id: next_event_id).count).to eq(1)
+  end
+
+  def post_mixed_batch
     post_event(event, origin: 'https://smoke.example')
     next_event = event.merge('event_id' => next_event_id)
     post_event([event, next_event, next_event], origin: 'https://smoke.example')
+  end
 
-    expect(last_response.status).to eq(201)
-    expect(JSON.parse(last_response.body)).to eq(
-      'event_ids' => [event.fetch('event_id'), next_event_id, next_event_id]
-    )
-    expect(database[:error_events].where(event_id: next_event_id).count).to eq(1)
+  def mixed_ids
+    [event.fetch('event_id'), next_event_id, next_event_id]
   end
 
   def next_event_id
