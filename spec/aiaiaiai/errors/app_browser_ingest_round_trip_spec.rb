@@ -39,7 +39,7 @@ RSpec.describe Aiaiaiai::Errors::App do
 
   before do
     Sequel::Migrator.run(database, File.expand_path('../../../db/migrations', __dir__))
-    database[:error_events].where(event_id: event.fetch('event_id')).delete
+    database[:error_events].where(event_id: [event.fetch('event_id'), next_event_id]).delete
     described_class.event_store = Aiaiaiai::Errors::EventStore.new(database)
     described_class.browser_policy = Aiaiaiai::Errors::BrowserIngestPolicy.new(
       '4x-errors/smoke' => ['https://smoke.example']
@@ -49,7 +49,7 @@ RSpec.describe Aiaiaiai::Errors::App do
 
   after do
     if database.table_exists?(:error_events)
-      database[:error_events].where(event_id: event.fetch('event_id')).delete
+      database[:error_events].where(event_id: [event.fetch('event_id'), next_event_id]).delete
     end
     database.disconnect
   end
@@ -75,6 +75,37 @@ RSpec.describe Aiaiaiai::Errors::App do
 
     expect(last_response.status).to eq(422)
     expect(database[:error_events].where(event_id: event.fetch('event_id')).count).to eq(0)
+  end
+
+  it 'acknowledges a repeated event without overwriting the stored occurrence' do
+    post_event(event, origin: 'https://smoke.example')
+    original = persisted_event
+    post_event(event, origin: 'https://smoke.example')
+
+    expect(last_response.status).to eq(201)
+    expect(persisted_event).to eq(original)
+  end
+
+  it 'persists new events in a batch containing repeated identifiers' do
+    post_mixed_batch
+
+    expect(last_response.status).to eq(201)
+    expect(JSON.parse(last_response.body).fetch('event_ids')).to eq(mixed_ids)
+    expect(database[:error_events].where(event_id: next_event_id).count).to eq(1)
+  end
+
+  def post_mixed_batch
+    post_event(event, origin: 'https://smoke.example')
+    next_event = event.merge('event_id' => next_event_id)
+    post_event([event, next_event, next_event], origin: 'https://smoke.example')
+  end
+
+  def mixed_ids
+    [event.fetch('event_id'), next_event_id, next_event_id]
+  end
+
+  def next_event_id
+    'd9efad3d-aad9-44d5-8126-b0b39f000002'
   end
 
   def app_config
