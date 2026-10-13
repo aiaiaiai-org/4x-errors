@@ -1,5 +1,5 @@
 // © 2026 aiaiaiai · aiaiaiai.org
-// Repository license is not selected yet; no SPDX identifier is asserted here.
+// SPDX-License-Identifier: Apache-2.0
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -66,4 +66,27 @@ test('treats non-2xx collector responses as failed delivery', async () => {
 test('rejects malformed or unsupported collector endpoints', () => {
   assert.equal(createBrowserHttpTransport({ collectorEndpoint: 'not a url', fetchImpl: async () => ({ ok: true }) }), null);
   assert.equal(createBrowserHttpTransport({ collectorEndpoint: 'ftp://errors.example', fetchImpl: async () => ({ ok: true }) }), null);
+});
+
+
+test('bounds a hung request and aborts it even when fetch ignores abort', async () => {
+  let signal;
+  const send = createBrowserHttpTransport({
+    collectorEndpoint: 'https://errors.example',
+    timeoutMs: 10,
+    fetchImpl: (_url, options) => {
+      signal = options.signal;
+      return new Promise(() => {});
+    }
+  });
+  assert.equal(await send(event), false);
+  assert.equal(signal.aborted, true);
+});
+
+test('treats a rejected fetch as a failed bounded delivery', async () => {
+  const send = createBrowserHttpTransport({
+    collectorEndpoint: 'https://errors.example',
+    fetchImpl: async () => { throw new Error('offline'); }
+  });
+  assert.equal(await send(event), false);
 });

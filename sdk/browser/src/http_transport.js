@@ -3,22 +3,34 @@
 
 const BROWSER_INGEST_PATH = '/v1/browser/events';
 
-export function createBrowserHttpTransport({ collectorEndpoint, fetchImpl = globalThis.fetch }) {
+export function createBrowserHttpTransport({ collectorEndpoint, fetchImpl = globalThis.fetch, timeoutMs = 5_000, keepalive = false }) {
   const endpoint = normalizeEndpoint(collectorEndpoint);
   if (!endpoint || typeof fetchImpl !== 'function') return null;
 
+  const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 5_000;
   return async (payload) => {
-    const response = await fetchImpl(endpoint, {
-      method: 'POST',
-      mode: 'cors',
-      credentials: 'omit',
-      headers: {
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    return response.ok;
+    const controller = new AbortController();
+    let timer;
+    try {
+      const expired = new Promise((resolve) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          resolve(false);
+        }, timeout);
+      });
+      const request = Promise.resolve().then(() => fetchImpl(endpoint, {
+        method: 'POST',
+        mode: 'cors',
+        credentials: 'omit',
+        ...(keepalive ? { keepalive: true } : {}),
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      })).then((response) => response.ok, () => false);
+      return await Promise.race([request, expired]);
+    } finally {
+      clearTimeout(timer);
+    }
   };
 }
 

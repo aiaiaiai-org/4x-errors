@@ -1,5 +1,5 @@
 // © 2026 aiaiaiai · aiaiaiai.org
-// Repository license is not selected yet; no SPDX identifier is asserted here.
+// SPDX-License-Identifier: Apache-2.0
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -160,4 +160,34 @@ test('drains byte-limited events as multiple bounded batches', async () => {
 
   assert.deepEqual(payloads, [[first], [second]]);
   assert.equal(await durableQueue.size(), 0);
+});
+
+
+test('delivers directly when IndexedDB rejects writes and continues with later events', async () => {
+  const payloads = [];
+  const delivery = createQueuedDelivery({
+    queue: { available: true, enqueue: async () => { throw new Error('storage denied'); } },
+    send: async (payload) => { payloads.push(payload); return true; }
+  });
+  const first = event('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+  const second = event('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+  await delivery.submit(first);
+  await delivery.submit(second);
+  assert.deepEqual(payloads, [first, second]);
+});
+
+
+test('falls back to direct delivery when IndexedDB reading fails', async () => {
+  const value = event('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+  const sent = [];
+  const delivery = createQueuedDelivery({
+    queue: {
+      available: true,
+      enqueue: async () => {},
+      peek: async () => { throw new Error('connection closed'); }
+    },
+    send: async (payload) => { sent.push(payload); return true; }
+  });
+  await delivery.submit(value);
+  assert.deepEqual(sent, [value]);
 });
