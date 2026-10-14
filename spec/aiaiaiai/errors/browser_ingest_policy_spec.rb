@@ -52,5 +52,4 @@ RSpec.describe Aiaiaiai::Errors::BrowserIngestPolicy do
   it 'rejects invalid mapping syntax with a configuration error' do
     expect { described_class.from_json('"app":oops') }.to raise_error(ArgumentError, /valid JSON/)
   end
-
 end
