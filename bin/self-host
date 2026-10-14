@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# © 2026 aiaiaiai · aiaiaiai.org
+# SPDX-License-Identifier: Apache-2.0
+set -Eeuo pipefail
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+config="$root/.env"
+compose_file="$root/deploy/self-host/compose.yaml"
+
+compose() {
+  docker compose --env-file "$config" -f "$compose_file" "$@"
+}
+
+setup() {
+  if [[ -e "$config" ]]; then
+    echo 'Configuration already exists; edit .env to change it. Database password preserved.'
+    return
+  fi
+  local project="${ERRORS_PROJECT:-}" origin="${APP_ORIGIN:-}"
+  local public_origin="${COLLECTOR_PUBLIC_ORIGIN:-}" profiles="" mapping password
+  if [[ -t 0 ]]; then
+    [[ -n "$project" ]] || read -r -p 'Project identifier (e.g. my/app): ' project
+    [[ -n "$origin" ]] || read -r -p 'Application origin (e.g. https://app.example.com): ' origin
+    [[ -n "$public_origin" ]] || read -r -p 'Collector URL (Enter: http://localhost:1927): ' public_origin
+  fi
+  public_origin="${public_origin:-http://localhost:1927}"
+  [[ "$project" =~ ^[a-zA-Z0-9][a-zA-Z0-9./_-]*$ ]] || { echo 'Set ERRORS_PROJECT or enter a project identifier.' >&2; exit 1; }
+  [[ "$origin" =~ ^https?://[a-zA-Z0-9.-]+(:[0-9]+)?$ ]] || { echo 'APP_ORIGIN must be an HTTP(S) origin without a path.' >&2; exit 1; }
+  [[ "$public_origin" =~ ^https?://[a-zA-Z0-9.-]+(:[0-9]+)?$ ]] || { echo 'Collector URL must be an HTTP(S) origin without a path.' >&2; exit 1; }
+  [[ "$public_origin" == https://* ]] && profiles=public
+  mapping="${BROWSER_INGEST_ORIGINS:-\"$project\":\"$origin\",}"
+  [[ "$mapping" != *"'"* ]] || { echo 'Use JSON double quotes in BROWSER_INGEST_ORIGINS.' >&2; exit 1; }
+  password="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+  umask 077
+  {
+    printf 'POSTGRES_PASSWORD=%s\n' "$password"
+    printf "BROWSER_INGEST_ORIGINS='%s'\n" "$mapping"
+    printf 'COLLECTOR_PUBLIC_ORIGIN=%s\n' "$public_origin"
+    printf 'COMPOSE_PROFILES=%s\n' "$profiles"
+    printf 'COLLECTOR_LOCAL_PORT=1927\n'
+  } > "$config"
+  echo 'Created .env with a generated database password. Next: bin/self-host up'
+}
+
+case "${1:-help}" in
+  setup) setup ;;
+  up)
+    docker compose version >/dev/null
+    [[ -f "$config" ]] || { echo 'Run bin/self-host setup first.' >&2; exit 1; }
+    compose config --quiet
+    if [[ "${SELF_HOST_BUILD:-1}" == 1 ]]; then compose build collector; fi
+    # Force rerunning migrations before recreating the collector on every upgrade.
+    compose up -d --wait postgres
+    compose run --rm migrate
+    compose up -d --wait
+    echo 'Collector ready. Next: bin/self-host verify'
+    ;;
+  verify) compose exec -T collector bundle exec ruby bin/self-host-smoke ;;
+  logs) compose logs --tail=100 -f ;;
+  stop) compose down ;;
+  backup)
+    mkdir -p "$root/self-host-backups"
+    umask 077
+    backup="$root/self-host-backups/$(date -u +%Y%m%dT%H%M%SZ).dump"
+    compose exec -T postgres pg_dump -U four_x_errors -d four_x_errors -Fc > "$backup"
+    echo "Backup saved: $backup"
+    ;;
+  *) echo 'Usage: bin/self-host {setup|up|verify|logs|stop|backup}' ;;
+esac

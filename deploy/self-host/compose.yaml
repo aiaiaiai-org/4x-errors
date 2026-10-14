@@ -1,0 +1,79 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+# SPDX-License-Identifier: Apache-2.0
+name: four-x-errors
+
+x-collector: &collector
+  image: ${COLLECTOR_IMAGE:-four-x-errors:self-host}
+  build:
+    context: ../..
+  environment:
+    DATABASE_URL: postgres://four_x_errors:${POSTGRES_PASSWORD:?Run bin/self-host setup}@postgres:5432/four_x_errors
+    BROWSER_INGEST_ORIGINS: ${BROWSER_INGEST_ORIGINS:?Configure permitted project origins}
+    INGEST_TOKEN_DIGESTS: ${INGEST_TOKEN_DIGESTS:-}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: four_x_errors
+      POSTGRES_DB: four_x_errors
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run bin/self-host setup}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U four_x_errors -d four_x_errors']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    <<: *collector
+    command: [bundle, exec, ruby, bin/migrate]
+    restart: 'no'
+    profiles: [tools]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  collector:
+    <<: *collector
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:${COLLECTOR_LOCAL_PORT:-1927}:9292'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - ruby
+        - -rnet/http
+        - -e
+        - 'exit(Net::HTTP.get_response(URI("http://127.0.0.1:9292/ready")).code == "200" ? 0 : 1)'
+      interval: 5s
+      timeout: 8s
+      retries: 12
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: [public]
+    restart: unless-stopped
+    environment:
+      COLLECTOR_PUBLIC_ORIGIN: ${COLLECTOR_PUBLIC_ORIGIN:-http://localhost:1927}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      collector:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:

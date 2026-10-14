@@ -41,14 +41,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve fork-owned package name
+        run: echo "COLLECTOR_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}:sha-${GITHUB_SHA}" >> "$GITHUB_ENV"
+
       - name: Build and publish immutable collector image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ghcr.io/aiaiaiai-org/4x-errors:sha-${{ github.sha }}
+          tags: ${{ env.COLLECTOR_IMAGE }}
           provenance: mode=max
           sbom: true
 
       - name: Verify published image
-        run: docker buildx imagetools inspect "ghcr.io/aiaiaiai-org/4x-errors:sha-${GITHUB_SHA}" >/dev/null
+        run: docker buildx imagetools inspect "$COLLECTOR_IMAGE" >/dev/null

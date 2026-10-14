@@ -16,7 +16,7 @@ permissions:
   packages: read
 
 env:
-  IMAGE_REPOSITORY: ghcr.io/aiaiaiai-org/4x-errors
+  IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}
 
 concurrency:
   group: deploy-4x-errors-production
@@ -29,7 +29,7 @@ jobs:
     environment: Production
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      BROWSER_INGEST_ORIGINS: ${{ secrets.BROWSER_INGEST_ORIGINS }}
+      BROWSER_INGEST_ORIGINS: ${{ vars.BROWSER_INGEST_ORIGINS }}
       INGEST_TOKEN_DIGESTS: ${{ secrets.INGEST_TOKEN_DIGESTS }}
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
@@ -63,7 +63,7 @@ jobs:
           done
           test -n "$DEPLOY_ROOT"
           test -n "$EDGE_NETWORK"
-          echo "COLLECTOR_IMAGE=${IMAGE_REPOSITORY}:sha-${release_sha}" >>"$GITHUB_ENV"
+          echo "COLLECTOR_IMAGE=${IMAGE_REPOSITORY,,}:sha-${release_sha}" >>"$GITHUB_ENV"
 
       - name: Wait for immutable collector package
         env:
@@ -117,7 +117,11 @@ jobs:
           umask 077
           {
             printf 'DATABASE_URL=%s\n' "$DATABASE_URL"
-            printf 'BROWSER_INGEST_ORIGINS=%s\n' "$BROWSER_INGEST_ORIGINS"
+            normalized_origins="$(docker run --rm \
+              --entrypoint ruby --env BROWSER_INGEST_ORIGINS "$COLLECTOR_IMAGE" \
+              -rjson -r/app/lib/aiaiaiai/errors/browser_ingest_policy \
+              -e 'puts JSON.generate(Aiaiaiai::Errors::BrowserIngestPolicy.from_json(ENV.fetch("BROWSER_INGEST_ORIGINS")).to_h)')"
+            printf 'BROWSER_INGEST_ORIGINS=%s\n' "$normalized_origins"
             if [ -n "$INGEST_TOKEN_DIGESTS" ]; then
               printf 'INGEST_TOKEN_DIGESTS=%s\n' "$INGEST_TOKEN_DIGESTS"
             fi

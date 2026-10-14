@@ -1,0 +1,7 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+.env
+.env.*
+!.env.example
+node_modules/
+vendor/bundle/
+self-host-backups/

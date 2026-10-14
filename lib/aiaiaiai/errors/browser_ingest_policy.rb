@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # © 2026 aiaiaiai · aiaiaiai.org
-# Repository license is not selected yet; no SPDX identifier is asserted here.
+# SPDX-License-Identifier: Apache-2.0
 
 require 'json'
 require 'uri'
@@ -11,12 +11,18 @@ module Aiaiaiai
     # Filters untrusted browser ingest by exact project/origin configuration.
     class BrowserIngestPolicy
       def self.from_json(json)
-        mapping = JSON.parse(json)
+        mapping = JSON.parse(mapping_json(json), allow_duplicate_key: false)
         raise ArgumentError, 'browser ingest origins must be an object' unless mapping.is_a?(Hash)
 
         new(mapping)
       rescue JSON::ParserError => e
-        raise ArgumentError, 'browser ingest origins must be valid JSON', cause: e
+        raise ArgumentError, "browser ingest origins must be valid JSON: #{e.message}", cause: e
+      end
+
+      def self.mapping_json(value)
+        text = String(value).strip
+        text = text[1...-1] if text.start_with?('{') && text.end_with?('}')
+        "{#{text.sub(/,\s*\z/, '')}}"
       end
 
       def initialize(mapping)
@@ -28,6 +34,10 @@ module Aiaiaiai
 
           [String(project), values.freeze]
         end.freeze
+      end
+
+      def to_h
+        @origins.transform_values(&:dup)
       end
 
       def configured?

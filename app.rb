@@ -108,7 +108,7 @@ module Aiaiaiai
 
     App.browser_rate_limiter = BrowserRateLimiter.new
     App.event_store = EventStore.connect(ENV.fetch('DATABASE_URL')) if ENV.key?('DATABASE_URL')
-    if ENV.key?('INGEST_TOKEN_DIGESTS')
+    unless ENV.fetch('INGEST_TOKEN_DIGESTS', '').empty?
       App.authenticator = IngestAuthenticator.from_json(ENV.fetch('INGEST_TOKEN_DIGESTS'))
     end
     if ENV.key?('BROWSER_INGEST_ORIGINS')
