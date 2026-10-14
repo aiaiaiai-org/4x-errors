@@ -82,6 +82,19 @@ jobs:
           bash bin/self-host up
           bash bin/self-host verify
           bash bin/self-host setup
+          bash bin/self-host backup
+          dumps=(self-host-backups/*.dump)
+          test -s "${dumps[0]}"
+          bash bin/self-host stop
+          bash bin/self-host up
+          count="$(docker compose --env-file .env -f deploy/self-host/compose.yaml exec -T postgres \
+            psql -U four_x_errors -d four_x_errors -Atc 'SELECT count(*) FROM error_events')"
+          test "$count" = 2
+      - name: Validate public HTTPS configuration
+        run: |
+          docker run --rm -e COLLECTOR_PUBLIC_ORIGIN=https://errors.example.com \
+            -v "$PWD/deploy/self-host/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
       - name: Stop self-host test stack
         if: always()
         run: bash bin/self-host stop
