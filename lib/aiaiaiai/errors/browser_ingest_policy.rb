@@ -11,7 +11,7 @@ module Aiaiaiai
     # Filters untrusted browser ingest by exact project/origin configuration.
     class BrowserIngestPolicy
       def self.from_json(json)
-        mapping = JSON.parse(mapping_json(json), object_class: UniqueMapping)
+        mapping = JSON.parse(mapping_json(json), object_class: UniqueMapping).to_h
         raise ArgumentError, 'browser ingest origins must be an object' unless mapping.is_a?(Hash)
 
         new(mapping)
@@ -20,11 +20,19 @@ module Aiaiaiai
       end
 
       # Reject duplicate projects instead of silently losing their earlier origins.
-      class UniqueMapping < Hash
-        def []=(key, value)
-          raise ArgumentError, "duplicate browser ingest project: #{key}" if key?(key)
+      class UniqueMapping
+        def initialize
+          @values = {}
+        end
 
-          super
+        def []=(key, value)
+          raise ArgumentError, "duplicate browser ingest project: #{key}" if @values.key?(key)
+
+          @values[key] = value
+        end
+
+        def to_h
+          @values
         end
       end
 
