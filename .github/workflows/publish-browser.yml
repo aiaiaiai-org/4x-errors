@@ -8,7 +8,12 @@ on:
 
 permissions:
   contents: read
+  actions: read
   id-token: write
+
+concurrency:
+  group: publish-browser-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -18,8 +23,10 @@ jobs:
         working-directory: sdk/browser
 
     steps:
-      - name: Checkout
+      - name: Checkout immutable release
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -28,17 +35,32 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false
 
+      - name: Verify tag and package identity
+        run: |
+          node ../../scripts/verify-browser-release.mjs
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/master
+
+      - name: Require successful CI for this release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs" \
+            -f head_sha="$GITHUB_SHA" -f per_page=100 \
+            | jq -e --arg sha "$GITHUB_SHA" \
+              'any(.workflow_runs[]; .head_sha == $sha and .status == "completed" and .conclusion == "success")' \
+            >/dev/null || { echo 'Release commit must have successful CI before publication.' >&2; exit 1; }
+
       - name: Ensure trusted-publishing npm CLI
         run: npm install --global 'npm@>=11.5.1 <12'
 
-      - name: Install validation dependencies
-        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Prepare the package archive
+        run: |
+          set -Eeuo pipefail
+          npm pack --json > "$RUNNER_TEMP/browser-package.json"
+          archive="$(jq -r '.[0].filename' "$RUNNER_TEMP/browser-package.json")"
+          test -s "$archive"
+          printf 'BROWSER_PACKAGE_ARCHIVE=%s\n' "$archive" >> "$GITHUB_ENV"
 
-      - name: Test package
-        run: npm test
-
-      - name: Verify package archive
-        run: npm pack --dry-run
-
-      - name: Publish public package
-        run: npm publish --access public
+      - name: Publish the verified archive
+        run: npm publish "$BROWSER_PACKAGE_ARCHIVE" --access public
