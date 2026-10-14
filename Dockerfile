@@ -5,6 +5,8 @@ FROM ruby:4.0.6-slim AS build
 
 WORKDIR /app
 
+ENV BUNDLE_PATH=/usr/local/bundle
+
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends build-essential libpq-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -29,7 +31,10 @@ COPY lib ./lib
 COPY bin ./bin
 COPY db ./db
 
-ENV RACK_ENV=production
+ENV RACK_ENV=production \
+    BUNDLE_PATH=/usr/local/bundle \
+    BUNDLE_WITHOUT=development:test \
+    BUNDLE_DEPLOYMENT=true
 EXPOSE 9292
 
 CMD ["bundle", "exec", "puma", "-b", "tcp://0.0.0.0:9292", "config.ru"]
