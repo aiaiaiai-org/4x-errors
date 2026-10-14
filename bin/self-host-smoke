@@ -1,0 +1,88 @@
+# frozen_string_literal: true
+
+# © 2026 aiaiaiai · aiaiaiai.org
+# SPDX-License-Identifier: Apache-2.0
+
+require 'json'
+require 'net/http'
+require 'securerandom'
+require 'time'
+require_relative '../lib/aiaiaiai/errors/browser_ingest_policy'
+require_relative '../lib/aiaiaiai/errors/event_store'
+
+# Exercises HTTP acceptance, immutable replay and new-event persistence on a private installation.
+class SelfHostSmoke
+  def initialize
+    @database = Sequel.connect(ENV.fetch('DATABASE_URL'))
+    policy = Aiaiaiai::Errors::BrowserIngestPolicy.from_json(ENV.fetch('BROWSER_INGEST_ORIGINS'))
+    @project, origins = policy.to_h.first
+    @origin = origins.fetch(0)
+  end
+
+  def run
+    check_ready
+    first = event
+    deliver(first, 'event_id', first.fetch('event_id'))
+    original = stored(first)
+    deliver(first, 'event_id', first.fetch('event_id'))
+    raise 'Replay changed the first occurrence' unless stored(first) == original
+
+    verify_batch(first)
+    puts 'PASS: HTTP acknowledgement, PostgreSQL persistence, replay and mixed batch.'
+  ensure
+    @database.disconnect
+  end
+
+  private
+
+  def check_ready
+    response = request(Net::HTTP::Get.new('/ready'))
+    raise 'Collector is not ready' unless response.code == '200'
+  end
+
+  def deliver(payload, key, expected)
+    req = Net::HTTP::Post.new('/v1/browser/events')
+    req['Content-Type'] = 'application/json'
+    req['Origin'] = @origin
+    req.body = JSON.generate(payload)
+    response = request(req)
+    raise "Ingest failed: HTTP #{response.code}" unless response.code == '201'
+    raise 'Incorrect collector acknowledgement' unless JSON.parse(response.body).fetch(key) == expected
+  end
+
+  def request(req)
+    Net::HTTP.start('127.0.0.1', 9292, open_timeout: 5, read_timeout: 5) do |http|
+      http.request(req)
+    end
+  end
+
+  def verify_batch(first)
+    second = event
+    ids = [first.fetch('event_id'), second.fetch('event_id')]
+    deliver([first, second], 'event_ids', ids)
+    ids.each { |id| verify_row(id) }
+    puts "Verified event IDs: #{ids.join(', ')}"
+  end
+
+  def verify_row(id)
+    rows = @database[:error_events].where(event_id: id).all
+    raise "Expected exactly one persisted event: #{id}" unless rows.length == 1
+  end
+
+  def stored(value)
+    @database[:error_events].where(event_id: value.fetch('event_id')).first ||
+      raise('Acknowledged event was not persisted')
+  end
+
+  def event
+    {
+      'protocol_version' => 'errors.v1', 'event_id' => SecureRandom.uuid,
+      'error_id' => 'collector.self.host.smoke', 'project' => @project,
+      'source' => 'self-host-smoke', 'severity' => 'info',
+      'message' => 'Self-host delivery verification', 'full_text' => '',
+      'observed_at' => Time.now.utc.iso8601, 'context' => {}, 'tags' => ['self-host-smoke']
+    }
+  end
+end
+
+SelfHostSmoke.new.run

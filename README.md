@@ -4,6 +4,18 @@ Shared error reporting protocol, SDKs and collector for 4xAI child organisations
 
 `4x-errors` provides one small, fault-tolerant boundary for reporting failures across otherwise independent projects. A reporting failure must never become an application failure.
 
+## Self-host in three commands
+
+After cloning your fork on a machine with Docker Compose:
+
+```sh
+bash bin/self-host setup
+bash bin/self-host up
+bash bin/self-host verify
+```
+
+This starts your own PostgreSQL and collector, applies migrations, supports automatic HTTPS for a public domain, and verifies HTTP delivery and database persistence. See [the self-hosting guide](docs/self-hosting.md) for configuration, backups and upgrades. Application clients need only the project identity and your collector endpoint.
+
 ## Model
 
 The system keeps four concepts separate:

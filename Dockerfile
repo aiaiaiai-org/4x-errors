@@ -23,9 +23,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /usr/local/bundle /usr/local/bundle
-COPY Gemfile Gemfile.lock ./
+COPY Gemfile Gemfile.lock .ruby-version ./
 COPY app.rb config.ru ./
 COPY lib ./lib
+COPY bin ./bin
+COPY db ./db
 
 ENV RACK_ENV=production
 EXPOSE 9292

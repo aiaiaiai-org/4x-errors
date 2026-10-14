@@ -70,3 +70,18 @@ jobs:
       - uses: actions/checkout@v5
       - name: Build image
         run: docker build --tag 4x-errors:ci .
+      - name: Verify self-host deployment and PostgreSQL delivery
+        env:
+          ERRORS_PROJECT: fork/smoke
+          APP_ORIGIN: https://app.example.com
+          COLLECTOR_IMAGE: 4x-errors:ci
+          SELF_HOST_BUILD: '0'
+        run: |
+          bash -n bin/self-host
+          bash bin/self-host setup
+          bash bin/self-host up
+          bash bin/self-host verify
+          bash bin/self-host setup
+      - name: Stop self-host test stack
+        if: always()
+        run: bash bin/self-host stop

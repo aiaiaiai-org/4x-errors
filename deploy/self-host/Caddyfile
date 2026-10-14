@@ -1,0 +1,8 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+{
+	admin off
+}
+
+{$COLLECTOR_PUBLIC_ORIGIN} {
+	reverse_proxy collector:9292
+}
