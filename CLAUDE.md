@@ -90,15 +90,16 @@ One rule, no judgement calls:
 - **Claude Code commits only as `x0skai <x0skai@aiaiaiai.org>`**, as author
   and committer. That is the session's git identity; never override it, and
   never commit as `0x0sky`.
-- **End every Claude Code commit with**
-  `Co-authored-by: Claude <noreply@anthropic.com>` whenever Claude wrote any
-  of it. Add `Assisted-by: OpenAI Codex` only when Codex contributed.
+- **End every Claude Code commit with** `Assisted-by: Claude Code` whenever
+  Claude wrote any of it. Add `Assisted-by: OpenAI Codex` only when Codex
+  contributed. Tools are credited with `Assisted-by`, never with
+  `Co-authored-by`, which is reserved for accounts.
 - **Claude Code never adds `0x0sky` as a co-author.** When `0x0sky`
   contributes to a commit, `0x0sky` adds its own `Co-authored-by` trailer.
 - Trailers go in the final paragraph, one per line, never duplicated, and the
   commit's author never appears among its own co-authors.
 - **Squash merges:** GitHub makes the PR's author the squash commit's author.
-  Write the final message explicitly: keep the Claude and Codex trailers from
+  Write the final message explicitly: keep the `Assisted-by` trailers from
   the branch, add `Co-authored-by: x0skai <x0skai@aiaiaiai.org>` when the PR
   author is `0x0sky` and `x0skai` committed to the branch, and drop any
   trailer that names the squash author.

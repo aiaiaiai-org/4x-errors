@@ -190,7 +190,9 @@ Tool credit is separate from account credit and applies only to real
 contribution to the commit:
 
 - `Assisted-by: OpenAI Codex` when Codex contributed.
-- `Co-authored-by: Claude <noreply@anthropic.com>` when Claude contributed.
+- `Assisted-by: Claude Code` when Claude contributed.
+
+Tools are never credited with `Co-authored-by`; it is reserved for accounts.
 
 Rules:
 
