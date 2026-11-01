@@ -1,0 +1,22 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+# SPDX-License-Identifier: Apache-2.0
+
+name: Shared sync
+
+on:
+  schedule:
+    - cron: '23 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Shared sync drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # Fails when the canonical source changed and this repository is behind.
+      - name: Compare shared files with the latest canonical source
+        run: ruby scripts/check-shared-sync.rb --latest

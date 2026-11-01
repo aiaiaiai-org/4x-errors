@@ -1,6 +1,16 @@
 # AGENTS.md
 
-Instructions for OpenAI coding agents working in this repository.
+Instructions for every coding agent working in this repository (Claude Code,
+OpenAI Codex and others). This file is the single source of agent instructions.
+Do not add a `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md`: Claude Code
+reads `AGENTS.md` only when none of those exist.
+
+This file and the scripts listed in `scripts/check-shared-sync.rb` are shared
+across aiaiaiai-org repositories. Everything outside `<!-- project-specific -->`
+blocks must match the canonical source named in `.github/shared-sync.yml`, and
+CI enforces it. Change shared text in the canonical source first, then sync each
+repository and update its pinned `ref`. Keep repository-specific rules inside
+project-specific blocks.
 
 ## GitHub delivery
 
@@ -12,10 +22,11 @@ pull requests, CI, releases, or deployment. Otherwise ignore it.
 Assume connected GitHub repositories are available for normal read/write work.
 Inspect actual state before reporting an access limitation.
 
-Proceed without additional confirmation for reversible repository actions,
-including creating branches, editing files, committing and pushing, opening or
-updating pull requests, commenting or reviewing, marking a pull request ready,
-and merging when all merge conditions below are satisfied.
+Proceed without additional confirmation for authorized reversible repository
+actions, including branches, commits, pull request preparation and technical
+reviews. Creating a pull request under a human identity requires that human's
+authorization, single-use unless an explicit scope and duration are granted.
+Merge requires explicit authorization for the specific change.
 
 Always obtain explicit user authorization before deployment or release
 activation, repository deletion or transfer, destructive data operations, or
@@ -36,6 +47,52 @@ authorization and is single-use unless the user explicitly says otherwise.
 - Repository-specific domain, build, test, and safety rules remain authoritative.
   If an older generic Git workflow conflicts with this section, this section
   wins unless the repository explicitly declares a current exception.
+
+### Contribution roles and attribution
+
+These rules apply to every human contributor, AI agent and development tool.
+Keep identities configurable outside this file; do not hardcode account names,
+email addresses or tool-specific identities here.
+
+- **Human contributor:** accountable person who owns the contribution and PR.
+- **AI agent:** identifiable actor implementing or reviewing changes.
+- **Development tool:** model, IDE or service used by an actor.
+
+A commit must use the actual implementation author's Git identity. Agent-authored
+commits use the identity configured for their execution environment, not the
+human contributor's identity. Agent identity is configured in project-specific instructions and verified
+against the authenticated GitHub connection and execution environment.
+Git author metadata alone does not authenticate an actor. Do not silently
+override the configured identity or impersonate another contributor.
+CI validates attribution trailer syntax without restricting contributors.
+Preserve real human authorship and use `Co-authored-by: Name <email>` only for
+people or agents who materially co-authored the change. Record the actual tool
+separately using `Assisted-by: Tool Name`; this is an informational trailer,
+not a GitHub identity or independent approval. Identify the tool and actual
+authors in the PR description.
+
+The PR creator is the responsible human contributor. Agents may create a PR
+using the human account only with explicit authorization, and must disclose
+agent preparation rather than presenting it as a personal human action.
+If the required identity or permission is unavailable, stop; never silently
+switch to a different account.
+
+Cross-tool technical review is allowed, including when implementations share
+an agent account. A reviewer must disclose the reviewing actor and tool.
+Technical review is not equivalent to an independent GitHub approval.
+Never claim approval that GitHub has not accepted, dismiss a blocking review
+merely to bypass protection, or circumvent required reviews.
+
+Merge attribution must identify actual human contributors, agent contributors
+and development tools. Preserve commit history, original authorship and
+repository-required merge method; do not rewrite protected history just to
+change attribution. Do not credit noncontributors as co-authors.
+
+Before the first write in a task, verify the authenticated account, intended
+actor, repository, branch, author and attribution. Recheck when the session,
+credential, repository or identity context changes. Stop on mismatch. Before merge,
+verify the exact head CI, required approvals, resolved review threads and
+explicit merge authorization.
 
 ### Before changing anything
 
@@ -62,7 +119,7 @@ inspect
 → latest base
 → task branch
 → smallest complete implementation
-→ draft pull request
+→ draft pull request (human-owned)
 → targeted checks
 → full CI
 → deploy validation when applicable
@@ -75,6 +132,11 @@ Deployment is a separate protected step after merge.
 
 ### Pull requests
 
+The responsible human contributor creates the pull request under their own
+identity, or explicitly authorizes an agent to create it using that identity.
+Agents prepare the branch, commits, description and review materials. Never
+substitute the agent's account as PR creator without explicit authorization.
+
 Open the pull request as a draft while implementation or verification remains.
 
 Keep it draft while implementation is incomplete, CI is unresolved, a required
@@ -85,7 +147,8 @@ Once the exact head revision is verified, required CI is green, applicable
 deploy validation is green, the requested scope is complete, and no known
 blocker remains, mark the pull request ready without asking the user again.
 
-Merge automatically when all of the following are true:
+Merge only with explicit human authorization and when all of the
+following are true:
 
 - the requested task is complete;
 - the final diff matches the intended scope;
@@ -176,50 +239,6 @@ that cannot yet have changed.
 Never report repository state, successful writes, merges, CI results, or
 deployment results without evidence from the corresponding operation.
 
-### Shared-account co-authorship
-
-Commit as the GitHub account that actually did the work, identified by its
-account ID:
-
-| GitHub account | Account ID | Git author (ID-based noreply)               |
-| -------------- | ---------- | ------------------------------------------- |
-| `0x0sky`       | 75973992   | `75973992+0x0sky@users.noreply.github.com`  |
-| `x0skai`       | 300452669  | `300452669+x0skai@users.noreply.github.com` |
-
-Tool credit is separate from account credit and applies only to real
-contribution to the commit:
-
-- `Assisted-by: OpenAI Codex` when Codex contributed.
-- `Assisted-by: Claude Code` when Claude contributed.
-
-Tools are never credited with `Co-authored-by`; it is reserved for accounts.
-
-Rules:
-
-- Add the other account as `Co-authored-by: <login> <<ID>+<login>@users.noreply.github.com>`
-  only when it contributed code, tests, documentation or an incorporated patch
-  to that exact commit. A review, approval, prompt or account ownership alone
-  does not qualify.
-- Solo authorship is normal. A commit with no real second contributor has no
-  account co-author. Do not add one for an achievement or to satisfy a check.
-- Never add the primary author as its own co-author, and never duplicate a
-  trailer.
-- Put trailers in the final paragraph of the commit message, one per line.
-- Never label a commit as an unknown author to avoid this rule. If the connected
-  GitHub API cannot author as the correct account, commit from a shell with the
-  correct repository-local identity. If no such shell exists, state the
-  limitation in the PR and do not claim the attribution.
-- The commit-attribution check validates identities, trailer format, and
-  duplicate or self credit. It cannot prove that a contribution happened; the
-  author and reviewers establish that.
-- Before merge, inspect the pushed commits: author account ID, trailers and
-  co-author IDs. A comment, review or PR body is not a substitute.
-- For squash merges, write the final message explicitly so genuine co-authors
-  and tool credits survive. Do not assume GitHub preserves them.
-- Do not manufacture commits, rewrite merged history, or change merge methods to
-  create credit. Signature verification and achievement status are reported
-  separately.
-
 ### Reporting
 
 Report outcomes, not tool choreography.
@@ -229,8 +248,8 @@ verified, the current delivery stage, any remaining blocker or material risk,
 and whether a protected action such as deployment still requires authorization.
 
 Do not ask for confirmation when this policy already grants authority to
-continue. If the task cannot be completed, identify the concrete blocker and
-the exact state reached instead of giving a generic access or tooling
-disclaimer.
+continue. Identity-use authorization is single-use by default; durable
+permission requires explicit scope and duration. Obtain explicit authorization
+for merge and deploy. If blocked, report the exact state reached.
 
 <!-- © 2026 aiaiaiai · aiaiaiai.org -->
