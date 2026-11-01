@@ -34,10 +34,25 @@ jobs:
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/four_x_errors_test
     steps:
       - uses: actions/checkout@v5
+        with:
+          # The attribution check walks every commit between base and head.
+          fetch-depth: 0
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: .ruby-version
           bundler-cache: true
+      - name: Validate PR commit attribution
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: ruby scripts/check-commit-attribution.rb
+      - name: Test commit attribution checker
+        run: ruby scripts/test-commit-attribution.rb
+      - name: Check shared files against the canonical source
+        run: ruby scripts/check-shared-sync.rb
+      - name: Test shared sync checker
+        run: ruby scripts/test-shared-sync.rb
       - name: Verify locked dependencies
         run: bundle check
       - name: Check formatting and lint

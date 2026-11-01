@@ -1,0 +1,6 @@
+# © 2026 aiaiaiai · aiaiaiai.org
+# SPDX-License-Identifier: Apache-2.0
+# Canonical source of the shared agent rules and scripts (see AGENTS.md).
+# Update ref together with the synced files.
+source: aiaiaiai-org/infra
+ref: 0f3f56df40cbc042b1338f46480f717a4b16e5e0
