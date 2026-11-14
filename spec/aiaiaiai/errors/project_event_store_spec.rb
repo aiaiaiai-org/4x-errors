@@ -12,19 +12,6 @@ RSpec.describe Aiaiaiai::Errors::ProjectEventStore do
   let(:router) do
     described_class.new(default: default, overrides: { 'market/trading' => dedicated })
   end
-  let(:dedicated_url) { 'postgresql://writer:secret@db.example.com/errors?sslmode=verify-full' }
-  let(:default_url) { 'postgresql://default/main' }
-  let(:calls) { [] }
-  let(:connector) do
-    lambda do |url, **opts|
-      calls << [url, opts]
-      url == default_url ? default : dedicated
-    end
-  end
-  let(:routes) { JSON.generate('market/trading' => dedicated_url) }
-  let(:configured_router) do
-    described_class.from_env(default_url: default_url, overrides_json: routes, connector: connector)
-  end
 
   it 'selects the shared default for unconfigured projects' do
     router.insert('project' => 'ordinary/app')
@@ -66,17 +53,45 @@ RSpec.describe Aiaiaiai::Errors::ProjectEventStore do
     allow(default).to receive(:insert).and_raise(Sequel::DatabaseError, 'down')
     expect { router.insert('project' => 'ordinary/app') }.to raise_error(Sequel::DatabaseError)
   end
+end
+
+RSpec.describe Aiaiaiai::Errors::ProjectEventStore, '.from_env' do
+  let(:fixtures) do
+    {
+      default: instance_spy(Aiaiaiai::Errors::EventStore, ready?: true, close: nil),
+      dedicated: instance_spy(Aiaiaiai::Errors::EventStore, ready?: true, close: nil),
+      default_url: 'postgresql://default/main',
+      dedicated_url: 'postgresql://writer:secret@db.example.com/errors?sslmode=verify-full'
+    }
+  end
+  let(:calls) { [] }
+  let(:connector) do
+    lambda do |url, **opts|
+      calls << [url, opts]
+      if url == fixtures.fetch(:default_url)
+        fixtures.fetch(:default)
+      else
+        fixtures.fetch(:dedicated)
+      end
+    end
+  end
+  let(:routes) { JSON.generate('market/trading' => fixtures.fetch(:dedicated_url)) }
+  let(:configured_router) do
+    described_class.from_env(default_url: fixtures.fetch(:default_url),
+                             overrides_json: routes, connector: connector)
+  end
 
   it 'defaults to no dedicated database routes' do
     expect(described_class.parse_overrides(nil)).to eq({})
   end
 
   it 'accepts a private TLS-protected dedicated mapping' do
-    expect(described_class.parse_overrides(routes)).to eq('market/trading' => dedicated_url)
+    expect(described_class.parse_overrides(routes))
+      .to eq('market/trading' => fixtures.fetch(:dedicated_url))
   end
 
   it 'rejects duplicated project keys' do
-    url = dedicated_url.to_json
+    url = fixtures.fetch(:dedicated_url).to_json
     expect { described_class.parse_overrides(%({"same":#{url},"same":#{url}})) }
       .to raise_error(ArgumentError)
   end
@@ -100,7 +115,10 @@ RSpec.describe Aiaiaiai::Errors::ProjectEventStore do
   end
 
   context 'when two projects share one dedicated database' do
-    let(:routes) { JSON.generate('market/a' => dedicated_url, 'market/b' => dedicated_url) }
+    let(:routes) do
+      JSON.generate('market/a' => fixtures.fetch(:dedicated_url),
+                    'market/b' => fixtures.fetch(:dedicated_url))
+    end
 
     it 'reuses the dedicated pool' do
       configured_router
@@ -109,18 +127,24 @@ RSpec.describe Aiaiaiai::Errors::ProjectEventStore do
 
     it 'closes each pool once' do
       configured_router.close
-      expect(dedicated).to have_received(:close).once
+      expect(fixtures.fetch(:dedicated)).to have_received(:close).once
     end
   end
 
   context 'when a later override fails to initialize' do
-    let(:other_url) { 'postgresql://writer:secret@other.example.com/errors?sslmode=require' }
-    let(:routes) { JSON.generate('market/a' => dedicated_url, 'market/b' => other_url) }
+    let(:routes) do
+      JSON.generate('market/a' => fixtures.fetch(:dedicated_url),
+                    'market/b' => 'postgresql://writer@other.example.com/errors?sslmode=require')
+    end
     let(:connector) do
       lambda do |url, **_opts|
-        raise Sequel::DatabaseConnectionError, 'down' if url == other_url
+        raise Sequel::DatabaseConnectionError, 'down' if url.include?('other.example.com')
 
-        url == default_url ? default : dedicated
+        if url == fixtures.fetch(:default_url)
+          fixtures.fetch(:default)
+        else
+          fixtures.fetch(:dedicated)
+        end
       end
     end
 
@@ -130,8 +154,8 @@ RSpec.describe Aiaiaiai::Errors::ProjectEventStore do
 
     it 'closes already-created pools' do
       expect { configured_router }.to raise_error(Sequel::DatabaseConnectionError)
-      expect(default).to have_received(:close)
-      expect(dedicated).to have_received(:close)
+      expect(fixtures.fetch(:default)).to have_received(:close)
+      expect(fixtures.fetch(:dedicated)).to have_received(:close)
     end
   end
 end

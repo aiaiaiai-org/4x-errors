@@ -20,7 +20,7 @@ module Aiaiaiai
 
       def self.from_env(default_url: ENV.fetch('DATABASE_URL', nil),
                         overrides_json: ENV.fetch('ERRORS_PROJECT_DATABASE_URLS', nil),
-                        connector: ->(url, **) { EventStore.connect(url, **) })
+                        connector: ->(url, **options) { EventStore.connect(url, **options) })
         raise ArgumentError, 'default collector DATABASE_URL is required' if default_url.to_s.empty?
 
         routes = parse_overrides(overrides_json)
