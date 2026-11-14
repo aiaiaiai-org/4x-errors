@@ -139,7 +139,9 @@ RSpec.describe Aiaiaiai::Errors::ProjectEventStore do
       end
       let(:connector) do
         lambda do |url, **_opts|
-          raise Sequel::DatabaseConnectionError, 'down' if url.include?('other.example.com')
+          if url == 'postgresql://writer@other.example.com/errors?sslmode=require'
+            raise Sequel::DatabaseConnectionError, 'down'
+          end
 
           if url == fixtures.fetch(:default_url)
             fixtures.fetch(:default)
