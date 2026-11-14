@@ -66,10 +66,12 @@ collector_controls:
     - request_size_limit
     - errors_v1_validation
     - edge_or_collector_rate_limiting
+    - bounded_per_IP_counters_that_fail_closed_on_capacity
+    - per_project_shared_budget
     - abuse_monitoring
     - bounded_batch_size
   recommended:
-    - waf_or_equivalent_edge_protection
+    - waf_or_equivalent_edge_protection_with_distributed_global_limits
     - per_project_and_per_source_rate_limits
     - repeated_event_fingerprinting
     - telemetry_storm_sampling_or_aggregation

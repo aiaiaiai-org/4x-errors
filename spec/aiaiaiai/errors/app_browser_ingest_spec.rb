@@ -104,6 +104,26 @@ RSpec.describe Aiaiaiai::Errors::App do
     expect(recorded_events).to eq([event, second_event])
   end
 
+  context 'when the shared project budget is exhausted' do
+    let(:previous_project_limiter) { described_class.browser_project_rate_limiter }
+
+    before do
+      previous_project_limiter
+      described_class.browser_project_rate_limiter =
+        Aiaiaiai::Errors::BrowserRateLimiter.new(events_per_window: 1)
+    end
+
+    after do
+      described_class.browser_project_rate_limiter = previous_project_limiter
+    end
+
+    it 'rejects the second event without persisting it' do
+      post_browser_event(event)
+      post_browser_event(second_event)
+      expect([last_response.status, recorded_events]).to eq([429, [event]])
+    end
+  end
+
   it 'rejects an empty batch before persistence' do
     post_browser_event([])
 
