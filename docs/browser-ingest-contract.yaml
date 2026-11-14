@@ -30,6 +30,7 @@ endpoint:
           items_max: 50
           persistence: atomic
           rule: any_invalid_or_unauthorised_event_rejects_the_entire_batch_before_persistence
+          project_scope: exactly_one_project_per_batch
   responses:
     single_success:
       status: 201
@@ -37,6 +38,12 @@ endpoint:
     batch_success:
       status: 201
       body: '{"event_ids":["<uuid>","..."]}'
+    mixed_projects_not_allowed:
+      status: 422
+      body: '{"error":"mixed_projects_not_allowed"}'
+    project_database_unavailable:
+      status: 503
+      body: '{"error":"project_database_unavailable"}'
   limits:
     request_bytes_max: 524288
     batch_items_max: 50

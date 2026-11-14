@@ -42,6 +42,18 @@ RSpec.describe Aiaiaiai::Errors::App do
     second_event.merge('error_id' => 'invalid id')
   end
 
+  def allow_two_projects
+    described_class.browser_policy = Aiaiaiai::Errors::BrowserIngestPolicy.new(
+      'nilx-one/web' => ['https://nilx.one'], 'other/project' => ['https://nilx.one']
+    )
+  end
+
+  def fail_dedicated_write!(method)
+    allow(store).to receive(method).and_raise(
+      Aiaiaiai::Errors::ProjectEventStore::ProjectDatabaseUnavailable
+    )
+  end
+
   def other_project_event
     second_event.merge('project' => 'other/project')
   end
@@ -122,6 +134,31 @@ RSpec.describe Aiaiaiai::Errors::App do
       post_browser_event(second_event)
       expect([last_response.status, recorded_events]).to eq([429, [event]])
     end
+  end
+
+  it 'rejects a mixed-project batch before touching any database' do
+    allow_two_projects
+    post_browser_event([event, other_project_event])
+
+    expect(last_response.status).to eq(422)
+    expect(response_body).to eq('error' => 'mixed_projects_not_allowed')
+    expect(recorded_events).to be_empty
+  end
+
+  it 'returns 503 when a dedicated project database is unavailable' do
+    fail_dedicated_write!(:insert)
+    post_browser_event(event)
+
+    expect(last_response.status).to eq(503)
+    expect(response_body).to eq('error' => 'project_database_unavailable')
+  end
+
+  it 'returns 503 for batches when a dedicated project database is unavailable' do
+    fail_dedicated_write!(:insert_batch)
+    post_browser_event([event, second_event])
+
+    expect(last_response.status).to eq(503)
+    expect(response_body).to eq('error' => 'project_database_unavailable')
   end
 
   it 'rejects an empty batch before persistence' do

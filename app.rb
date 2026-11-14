@@ -9,6 +9,7 @@ require_relative 'lib/aiaiaiai/errors/browser_ingest'
 require_relative 'lib/aiaiaiai/errors/browser_ingest_policy'
 require_relative 'lib/aiaiaiai/errors/browser_rate_limiter'
 require_relative 'lib/aiaiaiai/errors/event_store'
+require_relative 'lib/aiaiaiai/errors/project_event_store'
 require_relative 'lib/aiaiaiai/errors/event_validator'
 require_relative 'lib/aiaiaiai/errors/ingest_authenticator'
 
@@ -84,6 +85,9 @@ module Aiaiaiai
         event_id = self.class.event_store.insert(event)
         response.status = 201
         { event_id: event_id }
+      rescue ProjectEventStore::ProjectDatabaseUnavailable
+        response.status = 503
+        { error: 'project_database_unavailable' }
       end
 
       def json_error(status, code, details = nil)
@@ -111,7 +115,7 @@ module Aiaiaiai
     App.browser_project_rate_limiter = BrowserRateLimiter.new(
       events_per_window: 1_200, max_keys: 1_000
     )
-    App.event_store = EventStore.connect(ENV.fetch('DATABASE_URL')) if ENV.key?('DATABASE_URL')
+    App.event_store = ProjectEventStore.from_env if ENV.key?('DATABASE_URL')
     unless ENV.fetch('INGEST_TOKEN_DIGESTS', '').empty?
       App.authenticator = IngestAuthenticator.from_json(ENV.fetch('INGEST_TOKEN_DIGESTS'))
     end

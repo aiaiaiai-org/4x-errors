@@ -44,6 +44,8 @@ module Aiaiaiai
           validate_event(request, event)
           authorize_browser_project(request, event, origin)
         end
+        projects = events.map { |event| event.fetch('project') }.uniq
+        request.halt json_error(422, 'mixed_projects_not_allowed') if projects.size != 1
       end
 
       def persist_browser_events(events, batch:)
@@ -52,6 +54,9 @@ module Aiaiaiai
         event_ids = self.class.event_store.insert_batch(events)
         response.status = 201
         { event_ids: event_ids }
+      rescue ProjectEventStore::ProjectDatabaseUnavailable
+        response.status = 503
+        { error: 'project_database_unavailable' }
       end
 
       def authorize_browser_project(request, event, origin)
