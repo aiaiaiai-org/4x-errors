@@ -20,52 +20,74 @@ module Aiaiaiai
 
       def self.from_env(default_url: ENV.fetch('DATABASE_URL', nil),
                         overrides_json: ENV.fetch('ERRORS_PROJECT_DATABASE_URLS', nil),
-                        connector: ->(url, **options) { EventStore.connect(url, **options) })
+                        connector: ->(url, **) { EventStore.connect(url, **) })
         raise ArgumentError, 'default collector DATABASE_URL is required' if default_url.to_s.empty?
 
         routes = parse_overrides(overrides_json)
-        stores_by_url = {}
-        default = connector.call(default_url)
-        stores_by_url[default_url] = default
-        overrides = routes.to_h do |project, url|
-          stores_by_url[url] ||= connector.call(url, **OVERRIDE_CONNECTION_OPTIONS)
-          [project, stores_by_url.fetch(url)]
-        end
-        new(default: default, overrides: overrides)
+        stores = { default_url => connector.call(default_url) }
+        overrides = connect_overrides(routes, stores, connector)
+        new(default: stores.fetch(default_url), overrides: overrides)
       rescue StandardError
-        stores_by_url&.values&.uniq&.each(&:close)
+        stores.values.uniq.each(&:close) if stores
         raise
       end
+
+      def self.connect_overrides(routes, stores, connector)
+        routes.to_h do |project, url|
+          stores[url] ||= connector.call(url, **OVERRIDE_CONNECTION_OPTIONS)
+          [project, stores.fetch(url)]
+        end
+      end
+      private_class_method :connect_overrides
 
       def self.parse_overrides(value)
         return {} if value.nil? || value.strip.empty?
 
         mapping = JSON.parse(value, allow_duplicate_key: false)
-        raise ArgumentError, 'ERRORS_PROJECT_DATABASE_URLS must be an object' unless mapping.is_a?(Hash)
+        unless mapping.is_a?(Hash)
+          raise ArgumentError, 'ERRORS_PROJECT_DATABASE_URLS must be an object'
+        end
 
         mapping.each { |project, url| validate_mapping!(project, url) }
         mapping
-      rescue JSON::ParserError, URI::InvalidURIError
+      rescue JSON::ParserError
         raise ArgumentError, 'ERRORS_PROJECT_DATABASE_URLS must be valid'
       end
 
       def self.validate_mapping!(project, url)
-        pattern = %r{\A[a-zA-Z0-9][a-zA-Z0-9._/-]{0,254}\z}
-        unless project.is_a?(String) && project.match?(pattern) && url.is_a?(String)
-          raise ArgumentError, 'invalid project database mapping'
-        end
+        return if valid_project?(project) && valid_url?(url)
 
-        uri = URI.parse(url)
-        valid_scheme = %w[postgres postgresql].include?(uri.scheme)
-        valid_destination = uri.host && uri.user && uri.path && uri.path != '/'
-        sslmode = URI.decode_www_form(uri.query.to_s).to_h['sslmode']
-        unless valid_scheme && valid_destination && %w[require verify-ca verify-full].include?(sslmode)
-          raise ArgumentError, 'invalid project database mapping (TLS required)'
-        end
-      rescue URI::InvalidURIError, ArgumentError
         raise ArgumentError, 'invalid project database mapping (TLS required)'
       end
       private_class_method :validate_mapping!
+
+      def self.valid_project?(project)
+        pattern = %r{\A[a-zA-Z0-9][a-zA-Z0-9._/-]{0,254}\z}
+        project.is_a?(String) && project.match?(pattern)
+      end
+      private_class_method :valid_project?
+
+      def self.valid_url?(url)
+        return false unless url.is_a?(String)
+
+        uri = URI.parse(url)
+        valid_postgres_url?(uri) && encrypted_connection?(uri)
+      rescue URI::InvalidURIError, ArgumentError
+        false
+      end
+      private_class_method :valid_url?
+
+      def self.valid_postgres_url?(uri)
+        %w[postgres postgresql].include?(uri.scheme) &&
+          uri.host && uri.user && !uri.path.to_s.empty? && uri.path != '/'
+      end
+      private_class_method :valid_postgres_url?
+
+      def self.encrypted_connection?(uri)
+        sslmode = URI.decode_www_form(uri.query.to_s).to_h['sslmode']
+        %w[require verify-ca verify-full].include?(sslmode)
+      end
+      private_class_method :encrypted_connection?
 
       def initialize(default:, overrides: {})
         @default = default
@@ -76,9 +98,9 @@ module Aiaiaiai
         project = event.fetch('project')
         store_for(project).insert(event)
       rescue Sequel::Error
-        raise ProjectDatabaseUnavailable, 'dedicated project database unavailable' if dedicated?(project)
+        raise unless dedicated?(project)
 
-        raise
+        raise ProjectDatabaseUnavailable, 'dedicated project database unavailable'
       end
 
       def insert_batch(events)
@@ -88,9 +110,9 @@ module Aiaiaiai
         project = projects.first
         store_for(project).insert_batch(events)
       rescue Sequel::Error
-        raise ProjectDatabaseUnavailable, 'dedicated project database unavailable' if dedicated?(project)
+        raise unless dedicated?(project)
 
-        raise
+        raise ProjectDatabaseUnavailable, 'dedicated project database unavailable'
       end
 
       def ready?

@@ -48,6 +48,12 @@ RSpec.describe Aiaiaiai::Errors::App do
     )
   end
 
+  def fail_dedicated_write!(method)
+    allow(store).to receive(method).and_raise(
+      Aiaiaiai::Errors::ProjectEventStore::ProjectDatabaseUnavailable
+    )
+  end
+
   def other_project_event
     second_event.merge('project' => 'other/project')
   end
@@ -140,9 +146,7 @@ RSpec.describe Aiaiaiai::Errors::App do
   end
 
   it 'returns 503 when a dedicated project database is unavailable' do
-    allow(store).to receive(:insert).and_raise(
-      Aiaiaiai::Errors::ProjectEventStore::ProjectDatabaseUnavailable
-    )
+    fail_dedicated_write!(:insert)
     post_browser_event(event)
 
     expect(last_response.status).to eq(503)
@@ -150,9 +154,7 @@ RSpec.describe Aiaiaiai::Errors::App do
   end
 
   it 'returns 503 for batches when a dedicated project database is unavailable' do
-    allow(store).to receive(:insert_batch).and_raise(
-      Aiaiaiai::Errors::ProjectEventStore::ProjectDatabaseUnavailable
-    )
+    fail_dedicated_write!(:insert_batch)
     post_browser_event([event, second_event])
 
     expect(last_response.status).to eq(503)

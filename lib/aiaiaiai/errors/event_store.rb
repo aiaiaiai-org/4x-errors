@@ -15,8 +15,8 @@ module Aiaiaiai
         context tags family_id caused_by_event_id correlation_id
       ].freeze
 
-      def self.connect(database_url, **options)
-        database = Sequel.connect(database_url, **options)
+      def self.connect(database_url, **)
+        database = Sequel.connect(database_url, **)
         database.extension :pg_json
         new(database, owns_database: true)
       end

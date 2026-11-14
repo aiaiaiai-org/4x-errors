@@ -16,7 +16,6 @@ module Aiaiaiai
         payload = parse_json(request, read_event_body(request))
         events = normalize_browser_events(request, payload)
         validate_and_authorize_browser_events(request, events, origin)
-        enforce_single_project!(request, events)
         rate_limit_browser_events!(request, events, origin)
         persist_browser_events(events, batch: payload.is_a?(Array))
       end
@@ -40,16 +39,13 @@ module Aiaiaiai
         payload
       end
 
-      def enforce_single_project!(request, events)
-        projects = events.map { |event| event.fetch('project') }.uniq
-        request.halt json_error(422, 'mixed_projects_not_allowed') if projects.size != 1
-      end
-
       def validate_and_authorize_browser_events(request, events, origin)
         events.each do |event|
           validate_event(request, event)
           authorize_browser_project(request, event, origin)
         end
+        projects = events.map { |event| event.fetch('project') }.uniq
+        request.halt json_error(422, 'mixed_projects_not_allowed') if projects.size != 1
       end
 
       def persist_browser_events(events, batch:)
