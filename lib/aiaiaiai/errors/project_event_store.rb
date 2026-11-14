@@ -30,6 +30,7 @@ module Aiaiaiai
         unless mapping.is_a?(Hash)
           raise ArgumentError, 'ERRORS_PROJECT_DATABASE_URLS must be an object'
         end
+
         mapping.each { |project, url| validate_mapping!(project, url) }
         mapping
       rescue JSON::ParserError
@@ -37,7 +38,8 @@ module Aiaiaiai
       end
 
       def self.validate_mapping!(project, url)
-        valid_project = project.is_a?(String) && project.match?(%r{\A[a-zA-Z0-9][a-zA-Z0-9._/-]{0,254}\z})
+        pattern = %r{\A[a-zA-Z0-9][a-zA-Z0-9._/-]{0,254}\z}
+        valid_project = project.is_a?(String) && project.match?(pattern)
         valid_url = url.is_a?(String) && url.match?(%r{\Apostgres(?:ql)?://})
         raise ArgumentError, 'invalid project database mapping' unless valid_project && valid_url
       end
