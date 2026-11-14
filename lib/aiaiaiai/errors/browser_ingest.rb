@@ -75,6 +75,7 @@ module Aiaiaiai
         address = browser_remote_address(request)
         project_budget = self.class.browser_project_rate_limiter.consume(project, cost: count)
         return project_budget unless project_budget.allowed
+
         key = [project, origin, address].join('|')
         self.class.browser_rate_limiter.consume(key, cost: count)
       end
