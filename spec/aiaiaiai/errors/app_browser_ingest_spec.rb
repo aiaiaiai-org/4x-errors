@@ -105,14 +105,16 @@ RSpec.describe Aiaiaiai::Errors::App do
   end
 
   context 'when the shared project budget is exhausted' do
+    let(:previous_project_limiter) { described_class.browser_project_rate_limiter }
+
     before do
-      @previous_project_limiter = described_class.browser_project_rate_limiter
+      previous_project_limiter
       described_class.browser_project_rate_limiter =
         Aiaiaiai::Errors::BrowserRateLimiter.new(events_per_window: 1)
     end
 
     after do
-      described_class.browser_project_rate_limiter = @previous_project_limiter
+      described_class.browser_project_rate_limiter = previous_project_limiter
     end
 
     it 'rejects the second event without persisting it' do
