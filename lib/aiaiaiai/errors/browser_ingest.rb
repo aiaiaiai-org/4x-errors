@@ -16,6 +16,8 @@ module Aiaiaiai
         payload = parse_json(request, read_event_body(request))
         events = normalize_browser_events(request, payload)
         validate_and_authorize_browser_events(request, events, origin)
+        projects = events.map { |event| event.fetch('project') }.uniq
+        request.halt json_error(422, 'mixed_projects_not_allowed') if projects.size != 1
         rate_limit_browser_events!(request, events, origin)
         persist_browser_events(events, batch: payload.is_a?(Array))
       end
@@ -47,8 +49,6 @@ module Aiaiaiai
       end
 
       def persist_browser_events(events, batch:)
-        # One batch maps to one database transaction; never split atomicity across projects.
-        return [422, { 'content-type' => 'application/json' }, [JSON.generate(error: 'mixed_projects_not_allowed')]] if events.map { |event| event.fetch('project') }.uniq.size != 1
         return persist_event(events.fetch(0)) unless batch
 
         event_ids = self.class.event_store.insert_batch(events)
