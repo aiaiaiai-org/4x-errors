@@ -31,7 +31,8 @@ RSpec.describe Aiaiaiai::Errors::ProjectEventStore do
 
   it 'refuses mixed-project batch routing' do
     events = [{ 'project' => 'ordinary/app' }, { 'project' => 'market/trading' }]
-    expect { router.insert_batch(events) }.to raise_error(ArgumentError, 'batch must contain one project')
+    expect { router.insert_batch(events) }
+      .to raise_error(ArgumentError, 'batch must contain one project')
   end
 
   it 'refuses readiness when a dedicated database fails its health check' do
@@ -45,7 +46,8 @@ RSpec.describe Aiaiaiai::Errors::ProjectEventStore do
 
   it 'accepts a server-side dedicated database mapping' do
     mapping = '{"market/trading":"postgresql://host/db"}'
-    expect(described_class.parse_overrides(mapping)).to eq('market/trading' => 'postgresql://host/db')
+    expect(described_class.parse_overrides(mapping))
+      .to eq('market/trading' => 'postgresql://host/db')
   end
 
   it 'rejects duplicated project mapping keys' do
