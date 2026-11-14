@@ -110,12 +110,53 @@ RSpec.describe Aiaiaiai::Errors::App do
     expect(recorded_events).to eq([event, second_event])
   end
 
+  context 'when the shared project budget is exhausted' do
+    let(:previous_project_limiter) { described_class.browser_project_rate_limiter }
+
+    before do
+      previous_project_limiter
+      described_class.browser_project_rate_limiter =
+        Aiaiaiai::Errors::BrowserRateLimiter.new(events_per_window: 1)
+    end
+
+    after do
+      described_class.browser_project_rate_limiter = previous_project_limiter
+    end
+
+    it 'rejects the second event without persisting it' do
+      post_browser_event(event)
+      post_browser_event(second_event)
+      expect([last_response.status, recorded_events]).to eq([429, [event]])
+    end
+  end
+
   it 'rejects a mixed-project batch before touching any database' do
     allow_two_projects
     post_browser_event([event, other_project_event])
+
     expect(last_response.status).to eq(422)
     expect(response_body).to eq('error' => 'mixed_projects_not_allowed')
     expect(recorded_events).to be_empty
+  end
+
+  it 'returns 503 when a dedicated project database is unavailable' do
+    allow(store).to receive(:insert).and_raise(
+      Aiaiaiai::Errors::ProjectEventStore::ProjectDatabaseUnavailable
+    )
+    post_browser_event(event)
+
+    expect(last_response.status).to eq(503)
+    expect(response_body).to eq('error' => 'project_database_unavailable')
+  end
+
+  it 'returns 503 for batches when a dedicated project database is unavailable' do
+    allow(store).to receive(:insert_batch).and_raise(
+      Aiaiaiai::Errors::ProjectEventStore::ProjectDatabaseUnavailable
+    )
+    post_browser_event([event, second_event])
+
+    expect(last_response.status).to eq(503)
+    expect(response_body).to eq('error' => 'project_database_unavailable')
   end
 
   it 'rejects an empty batch before persistence' do

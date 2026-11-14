@@ -31,20 +31,28 @@ module Aiaiaiai
 
         @mutex.synchronize do
           prune!(now)
-          entry = current_entry(key, now)
-          return rejected(entry, now) if entry[:count] + event_cost > @events_per_window
+          # Saturation must fail closed; never evict live counters for rotating IPs.
+          if !@entries.key?(key) && @entries.size >= @max_keys
+            return Result.new(allowed: false, retry_after: @window_seconds)
+          end
 
-          entry[:count] += event_cost
-          Result.new(allowed: true, retry_after: nil)
+          consume_key(key, now, event_cost)
         end
       end
 
       private
 
+      def consume_key(key, now, cost)
+        entry = current_entry(key, now)
+        return rejected(entry, now) if entry[:count] + cost > @events_per_window
+
+        entry[:count] += cost
+        Result.new(allowed: true, retry_after: nil)
+      end
+
       def current_entry(key, now)
         entry = @entries[key]
         if entry.nil? || now >= entry[:expires_at]
-          ensure_capacity!
           entry = { count: 0, expires_at: now + @window_seconds }
           @entries[key] = entry
         end
@@ -58,13 +66,6 @@ module Aiaiaiai
 
       def prune!(now)
         @entries.delete_if { |_key, entry| now >= entry[:expires_at] }
-      end
-
-      def ensure_capacity!
-        return if @entries.length < @max_keys
-
-        oldest_key = @entries.min_by { |_key, entry| entry[:expires_at] }&.first
-        @entries.delete(oldest_key) if oldest_key
       end
 
       def positive_integer(value, fallback)

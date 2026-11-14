@@ -58,6 +58,9 @@ module Aiaiaiai
         event_ids = self.class.event_store.insert_batch(events)
         response.status = 201
         { event_ids: event_ids }
+      rescue ProjectEventStore::ProjectDatabaseUnavailable
+        response.status = 503
+        { error: 'project_database_unavailable' }
       end
 
       def authorize_browser_project(request, event, origin)
@@ -80,7 +83,12 @@ module Aiaiaiai
       def consume_browser_budget(request, project, origin, count)
         address = browser_remote_address(request)
         key = [project, origin, address].join('|')
-        self.class.browser_rate_limiter.consume(key, cost: count)
+        source_budget = self.class.browser_rate_limiter.consume(key, cost: count)
+        return source_budget unless source_budget.allowed
+
+        # One abusive source cannot exhaust a whole project's shared budget
+        # after exhausting its own source-level quota.
+        self.class.browser_project_rate_limiter.consume(project, cost: count)
       end
 
       def reject_rate_limited!(request, result)
@@ -96,7 +104,8 @@ module Aiaiaiai
       def browser_collector_configured?
         self.class.event_store &&
           self.class.browser_policy&.configured? &&
-          self.class.browser_rate_limiter
+          self.class.browser_rate_limiter &&
+          self.class.browser_project_rate_limiter
       end
 
       def ensure_browser_configured!(request)

@@ -5,20 +5,14 @@
 
 require 'sequel'
 require 'sequel/extensions/migration'
-require_relative '../lib/aiaiaiai/errors/project_event_store'
 
 DATABASE_URL = ENV.fetch('DATABASE_URL')
 MIGRATIONS_PATH = File.expand_path('../db/migrations', __dir__)
 
-# The central DATABASE_URL is the default (e.g. the existing Supabase project).
-# Overrides are operator-managed only, never passed by SDK clients.
-override_urls = Aiaiaiai::Errors::ProjectEventStore.parse_overrides(ENV['ERRORS_PROJECT_DATABASE_URLS']).values
-([DATABASE_URL] + override_urls).uniq.each do |url|
-  database = nil
-  begin
-    database = Sequel.connect(url)
-    Sequel::Migrator.run(database, MIGRATIONS_PATH)
-  ensure
-    database&.disconnect
-  end
+database = nil
+begin
+  database = Sequel.connect(DATABASE_URL)
+  Sequel::Migrator.run(database, MIGRATIONS_PATH)
+ensure
+  database&.disconnect
 end
