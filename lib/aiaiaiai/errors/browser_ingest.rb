@@ -16,8 +16,7 @@ module Aiaiaiai
         payload = parse_json(request, read_event_body(request))
         events = normalize_browser_events(request, payload)
         validate_and_authorize_browser_events(request, events, origin)
-        projects = events.map { |event| event.fetch('project') }.uniq
-        request.halt json_error(422, 'mixed_projects_not_allowed') if projects.size != 1
+        enforce_single_project!(request, events)
         rate_limit_browser_events!(request, events, origin)
         persist_browser_events(events, batch: payload.is_a?(Array))
       end
@@ -39,6 +38,11 @@ module Aiaiaiai
         invalid_batch = payload.empty? || payload.length > MAX_BROWSER_BATCH_SIZE
         request.halt json_error(422, 'invalid_batch') if invalid_batch
         payload
+      end
+
+      def enforce_single_project!(request, events)
+        projects = events.map { |event| event.fetch('project') }.uniq
+        request.halt json_error(422, 'mixed_projects_not_allowed') if projects.size != 1
       end
 
       def validate_and_authorize_browser_events(request, events, origin)
