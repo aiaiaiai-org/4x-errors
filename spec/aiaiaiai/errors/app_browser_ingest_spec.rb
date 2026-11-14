@@ -42,6 +42,12 @@ RSpec.describe Aiaiaiai::Errors::App do
     second_event.merge('error_id' => 'invalid id')
   end
 
+  def allow_two_projects
+    described_class.browser_policy = Aiaiaiai::Errors::BrowserIngestPolicy.new(
+      'nilx-one/web' => ['https://nilx.one'], 'other/project' => ['https://nilx.one']
+    )
+  end
+
   def other_project_event
     second_event.merge('project' => 'other/project')
   end
@@ -105,10 +111,7 @@ RSpec.describe Aiaiaiai::Errors::App do
   end
 
   it 'rejects a mixed-project batch before touching any database' do
-    described_class.browser_policy = Aiaiaiai::Errors::BrowserIngestPolicy.new(
-      'nilx-one/web' => ['https://nilx.one'],
-      'other/project' => ['https://nilx.one']
-    )
+    allow_two_projects
     post_browser_event([event, other_project_event])
     expect(last_response.status).to eq(422)
     expect(response_body).to eq('error' => 'mixed_projects_not_allowed')
