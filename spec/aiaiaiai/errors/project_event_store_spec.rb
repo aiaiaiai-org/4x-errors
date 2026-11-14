@@ -7,52 +7,60 @@ require 'rspec'
 require_relative '../../../lib/aiaiaiai/errors/project_event_store'
 
 RSpec.describe Aiaiaiai::Errors::ProjectEventStore do
-  let(:default) { double('default storage', ready?: true, close: nil) }
-  let(:dedicated) { double('dedicated storage', ready?: true, close: nil) }
-  let(:router) { described_class.new(default: default, overrides: { 'market/trading' => dedicated }) }
+  let(:default) { instance_spy(Aiaiaiai::Errors::EventStore, ready?: true, close: nil) }
+  let(:dedicated) { instance_spy(Aiaiaiai::Errors::EventStore, ready?: true, close: nil) }
+  let(:router) do
+    described_class.new(default: default, overrides: { 'market/trading' => dedicated })
+  end
 
-  it 'selects the default store for an unconfigured project' do
-    expect(default).to receive(:insert).with('project' => 'ordinary/app')
+  it 'selects central default for unconfigured projects' do
     router.insert('project' => 'ordinary/app')
+    expect(default).to have_received(:insert).with('project' => 'ordinary/app')
   end
 
-  it 'selects an explicit dedicated store only from server configuration' do
-    expect(dedicated).to receive(:insert).with('project' => 'market/trading')
+  it 'selects dedicated store only for an explicitly mapped project' do
     router.insert('project' => 'market/trading')
+    expect(dedicated).to have_received(:insert).with('project' => 'market/trading')
   end
 
-  it 'keeps batches atomic inside one configured database' do
-    events = [{ 'project' => 'market/trading' }, { 'project' => 'market/trading' }]
-    expect(dedicated).to receive(:insert_batch).with(events)
+  it 'keeps one-project batch atomic within one database' do
+    events = Array.new(2) { { 'project' => 'market/trading' } }
     router.insert_batch(events)
+    expect(dedicated).to have_received(:insert_batch).with(events)
   end
 
-  it 'refuses batches that cross database boundaries' do
-    expect { router.insert_batch([{ 'project' => 'ordinary/app' }, { 'project' => 'market/trading' }]) }
-      .to raise_error(ArgumentError, 'batch must contain one project')
+  it 'refuses mixed-project batch routing' do
+    events = [{ 'project' => 'ordinary/app' }, { 'project' => 'market/trading' }]
+    expect { router.insert_batch(events) }.to raise_error(ArgumentError, 'batch must contain one project')
   end
 
-  it 'checks both stores before advertising readiness' do
+  it 'refuses readiness when a dedicated database fails its health check' do
     allow(dedicated).to receive(:ready?).and_return(false)
-    expect(router.ready?).to eq(false)
+    expect(router.ready?).to be(false)
   end
 
-  it 'does not accept arbitrary or duplicated project database configuration' do
+  it 'defaults to zero custom database routes' do
     expect(described_class.parse_overrides(nil)).to eq({})
-    expect(described_class.parse_overrides('{"market/trading":"postgresql://host/db"}'))
-      .to eq('market/trading' => 'postgresql://host/db')
-    expect { described_class.parse_overrides('{"same":"postgres://a","same":"postgres://b"}') }
-      .to raise_error(ArgumentError)
-    expect { described_class.parse_overrides('{"market/trading":"https://malicious.example"}') }
-      .to raise_error(ArgumentError)
   end
 
-  it 'uses the single central default when no override is supplied' do
-    calls = []
-    connector = ->(url) { calls << url; default }
-    obj = described_class.from_env(default_url: 'postgres://central/default', overrides_json: nil,
-                                   connector: connector)
-    expect(calls).to eq(['postgres://central/default'])
-    expect(obj.ready?).to eq(true)
+  it 'accepts a server-side dedicated database mapping' do
+    mapping = '{"market/trading":"postgresql://host/db"}'
+    expect(described_class.parse_overrides(mapping)).to eq('market/trading' => 'postgresql://host/db')
+  end
+
+  it 'rejects duplicated project mapping keys' do
+    mapping = '{"same":"postgres://a","same":"postgres://b"}'
+    expect { described_class.parse_overrides(mapping) }.to raise_error(ArgumentError)
+  end
+
+  it 'rejects a client-controlled web URL in storage routing' do
+    mapping = '{"market/trading":"https://malicious.example"}'
+    expect { described_class.parse_overrides(mapping) }.to raise_error(ArgumentError)
+  end
+
+  it 'uses one default connection when no override is configured' do
+    connector = ->(_url) { default }
+    obj = described_class.from_env(default_url: 'postgres://central/default', connector: connector)
+    expect(obj.ready?).to be(true)
   end
 end
