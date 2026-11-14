@@ -73,6 +73,8 @@ module Aiaiaiai
 
       def consume_browser_budget(request, project, origin, count)
         address = browser_remote_address(request)
+        project_budget = self.class.browser_project_rate_limiter.consume(project, cost: count)
+        return project_budget unless project_budget.allowed
         key = [project, origin, address].join('|')
         self.class.browser_rate_limiter.consume(key, cost: count)
       end
@@ -90,7 +92,8 @@ module Aiaiaiai
       def browser_collector_configured?
         self.class.event_store &&
           self.class.browser_policy&.configured? &&
-          self.class.browser_rate_limiter
+          self.class.browser_rate_limiter &&
+          self.class.browser_project_rate_limiter
       end
 
       def ensure_browser_configured!(request)
