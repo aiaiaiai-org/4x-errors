@@ -31,6 +31,11 @@ module Aiaiaiai
 
         @mutex.synchronize do
           prune!(now)
+          # Saturation must fail closed. Evicting a live key would reset its
+          # counter and allow attackers to bypass limits by rotating IPs.
+          if !@entries.key?(key) && @entries.size >= @max_keys
+            return Result.new(allowed: false, retry_after: @window_seconds)
+          end
           entry = current_entry(key, now)
           return rejected(entry, now) if entry[:count] + event_cost > @events_per_window
 
@@ -44,7 +49,6 @@ module Aiaiaiai
       def current_entry(key, now)
         entry = @entries[key]
         if entry.nil? || now >= entry[:expires_at]
-          ensure_capacity!
           entry = { count: 0, expires_at: now + @window_seconds }
           @entries[key] = entry
         end
@@ -58,13 +62,6 @@ module Aiaiaiai
 
       def prune!(now)
         @entries.delete_if { |_key, entry| now >= entry[:expires_at] }
-      end
-
-      def ensure_capacity!
-        return if @entries.length < @max_keys
-
-        oldest_key = @entries.min_by { |_key, entry| entry[:expires_at] }&.first
-        @entries.delete(oldest_key) if oldest_key
       end
 
       def positive_integer(value, fallback)
