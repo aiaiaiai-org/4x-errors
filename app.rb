@@ -9,6 +9,7 @@ require_relative 'lib/aiaiaiai/errors/browser_ingest'
 require_relative 'lib/aiaiaiai/errors/browser_ingest_policy'
 require_relative 'lib/aiaiaiai/errors/browser_rate_limiter'
 require_relative 'lib/aiaiaiai/errors/event_store'
+require_relative 'lib/aiaiaiai/errors/project_event_store'
 require_relative 'lib/aiaiaiai/errors/event_validator'
 require_relative 'lib/aiaiaiai/errors/ingest_authenticator'
 
@@ -107,7 +108,7 @@ module Aiaiaiai
     end
 
     App.browser_rate_limiter = BrowserRateLimiter.new
-    App.event_store = EventStore.connect(ENV.fetch('DATABASE_URL')) if ENV.key?('DATABASE_URL')
+    App.event_store = ProjectEventStore.from_env if ENV.key?('DATABASE_URL')
     unless ENV.fetch('INGEST_TOKEN_DIGESTS', '').empty?
       App.authenticator = IngestAuthenticator.from_json(ENV.fetch('INGEST_TOKEN_DIGESTS'))
     end
