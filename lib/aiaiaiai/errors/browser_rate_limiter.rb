@@ -31,20 +31,24 @@ module Aiaiaiai
 
         @mutex.synchronize do
           prune!(now)
-          # Saturation must fail closed. Evicting a live key would reset its
-          # counter and allow attackers to bypass limits by rotating IPs.
+          # Saturation must fail closed; never evict live counters for rotating IPs.
           if !@entries.key?(key) && @entries.size >= @max_keys
             return Result.new(allowed: false, retry_after: @window_seconds)
           end
-          entry = current_entry(key, now)
-          return rejected(entry, now) if entry[:count] + event_cost > @events_per_window
 
-          entry[:count] += event_cost
-          Result.new(allowed: true, retry_after: nil)
+          consume_key(key, now, event_cost)
         end
       end
 
       private
+
+      def consume_key(key, now, cost)
+        entry = current_entry(key, now)
+        return rejected(entry, now) if entry[:count] + cost > @events_per_window
+
+        entry[:count] += cost
+        Result.new(allowed: true, retry_after: nil)
+      end
 
       def current_entry(key, now)
         entry = @entries[key]
