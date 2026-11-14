@@ -73,11 +73,13 @@ module Aiaiaiai
 
       def consume_browser_budget(request, project, origin, count)
         address = browser_remote_address(request)
-        project_budget = self.class.browser_project_rate_limiter.consume(project, cost: count)
-        return project_budget unless project_budget.allowed
-
         key = [project, origin, address].join('|')
-        self.class.browser_rate_limiter.consume(key, cost: count)
+        source_budget = self.class.browser_rate_limiter.consume(key, cost: count)
+        return source_budget unless source_budget.allowed
+
+        # One abusive source cannot exhaust a whole project's shared budget
+        # after exhausting its own source-level quota.
+        self.class.browser_project_rate_limiter.consume(project, cost: count)
       end
 
       def reject_rate_limited!(request, result)
