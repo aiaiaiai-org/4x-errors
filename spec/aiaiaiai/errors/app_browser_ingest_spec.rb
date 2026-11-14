@@ -104,6 +104,17 @@ RSpec.describe Aiaiaiai::Errors::App do
     expect(recorded_events).to eq([event, second_event])
   end
 
+  it 'rejects a mixed-project batch before touching any database' do
+    described_class.browser_policy = Aiaiaiai::Errors::BrowserIngestPolicy.new(
+      'nilx-one/web' => ['https://nilx.one'],
+      'other/project' => ['https://nilx.one']
+    )
+    post_browser_event([event, other_project_event])
+    expect(last_response.status).to eq(422)
+    expect(response_body).to eq('error' => 'mixed_projects_not_allowed')
+    expect(recorded_events).to be_empty
+  end
+
   it 'rejects an empty batch before persistence' do
     post_browser_event([])
 
