@@ -35,6 +35,10 @@ ENV RACK_ENV=production \
     BUNDLE_PATH=/usr/local/bundle \
     BUNDLE_WITHOUT=development:test \
     BUNDLE_DEPLOYMENT=true
+# The collector listens on 9292 unless PORT says otherwise. Infra's production
+# workload contracts all use 1927 and set PORT to it; the self-host and
+# direct-SSH paths keep 9292.
+ENV PORT=9292
 EXPOSE 9292
 
-CMD ["bundle", "exec", "puma", "-b", "tcp://0.0.0.0:9292", "config.ru"]
+CMD ["sh", "-c", "exec bundle exec puma -b tcp://0.0.0.0:${PORT} config.ru"]

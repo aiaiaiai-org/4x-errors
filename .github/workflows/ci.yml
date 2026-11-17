@@ -110,6 +110,20 @@ jobs:
           docker run --rm -e COLLECTOR_PUBLIC_ORIGIN=https://errors.example.com \
             -v "$PWD/deploy/self-host/Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+      - name: Verify the collector listens on the port it is given
+        run: |
+          set -Eeuo pipefail
+          # Infra runs every production workload on 1927 and says so with PORT.
+          docker run --detach --name port-check --env PORT=1927 \
+            --publish 127.0.0.1:19270:1927 4x-errors:ci >/dev/null
+          answered=0
+          for _ in $(seq 1 30); do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:19270/health >/dev/null; then answered=1; break; fi
+            sleep 1
+          done
+          if [ "$answered" != 1 ]; then docker logs port-check >&2 || true; fi
+          docker rm --force port-check >/dev/null
+          test "$answered" = 1
       - name: Stop self-host test stack
         if: always()
         run: bash bin/self-host stop
