@@ -5,30 +5,31 @@ name: Package collector
 
 on:
   push:
+    # Every master head: infra delivers only the image tagged with exactly the
+    # branch head (aiaiaiai-org/infra docs/automatic-delivery.md), so a head
+    # that touched only documentation needs one too.
     branches: [master]
-    paths:
-      - Dockerfile
-      - Gemfile
-      - Gemfile.lock
-      - .ruby-version
-      - app.rb
-      - config.ru
-      - lib/**
-      - .github/workflows/package-collector.yml
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
-  group: package-4x-errors-${{ github.ref }}
+  group: package-4x-errors-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
   package:
+    name: Package immutable image
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      image: ${{ steps.name.outputs.image }}
     steps:
       - uses: actions/checkout@v5
 
@@ -41,17 +42,114 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve fork-owned package name
-        run: echo "COLLECTOR_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}:sha-${GITHUB_SHA}" >> "$GITHUB_ENV"
+      - id: name
+        name: Resolve fork-owned package name
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       - name: Build and publish immutable collector image
+        id: image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ env.COLLECTOR_IMAGE }}
+          # `<full SHA>` is the tag infra's automatic delivery resolves; the
+          # `sha-` tag stays for the direct-SSH Deploy collector workflow.
+          tags: |
+            ${{ steps.name.outputs.image }}:${{ github.sha }}
+            ${{ steps.name.outputs.image }}:sha-${{ github.sha }}
           provenance: mode=max
           sbom: true
 
       - name: Verify published image
-        run: docker buildx imagetools inspect "$COLLECTOR_IMAGE" >/dev/null
+        run: docker buildx imagetools inspect "${{ steps.name.outputs.image }}:${{ github.sha }}" >/dev/null
+
+      - name: Attest the commit image
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ steps.name.outputs.image }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
+
+  # The collector's secret envelope for infra's automatic delivery of
+  # 4x-errors. It runs only once the owner set the repository variable
+  # INFRA_DELIVERY=enabled after filling the Production environment, so master
+  # never depends on production values before then. This repository holds no
+  # infra credential; infra holds none of these values.
+  envelope:
+    name: Publish the production secret envelope
+    needs: package
+    if: github.ref == 'refs/heads/master' && vars.INFRA_DELIVERY == 'enabled'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: Production
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      IMAGE: ${{ needs.package.outputs.image }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      BROWSER_INGEST_ORIGINS: ${{ vars.BROWSER_INGEST_ORIGINS }}
+    steps:
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Authenticate to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Seal the collector configuration to the edge-prod-2 recipient
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          for name in DATABASE_URL BROWSER_INGEST_ORIGINS; do
+            test -n "$(printenv "$name")" || { echo "::error::Missing Production value $name." >&2; exit 1; }
+          done
+          [[ "$DATABASE_URL" != *$'\n'* && "$DATABASE_URL" != *$'\r'* ]] || { echo "::error::DATABASE_URL must be one line." >&2; exit 1; }
+          # The origin mapping may span lines; the runtime takes one. The
+          # collector's own policy parser normalizes it, so a mapping it would
+          # refuse stops here and not at the first request of a live deployment.
+          docker pull "$IMAGE:$GITHUB_SHA" >/dev/null
+          origins="$(docker run --rm --entrypoint ruby --env BROWSER_INGEST_ORIGINS "$IMAGE:$GITHUB_SHA" \
+            -rjson -r/app/lib/aiaiaiai/errors/browser_ingest_policy \
+            -e 'puts JSON.generate(Aiaiaiai::Errors::BrowserIngestPolicy.from_json(ENV.fetch("BROWSER_INGEST_ORIGINS")).to_h)')"
+          [[ -n "$origins" && "$origins" != *$'\n'* ]] || { echo "::error::BROWSER_INGEST_ORIGINS did not normalize to one line." >&2; exit 1; }
+          # The envelope carries exactly the names the 4x-errors contract in
+          # infra maps under runtime.secrets.
+          contract="$(curl -fsSL https://raw.githubusercontent.com/aiaiaiai-org/infra/master/contracts/services/4x-errors.yaml)"
+          mapped="$(awk '/^    secrets:/ { in_list = 1; next } in_list && /^      - [A-Z][A-Z0-9_]*=[A-Z][A-Z0-9_]*$/ { sub(/^      - [A-Z][A-Z0-9_]*=/, ""); print; next } in_list { exit }' <<<"$contract" | sort)"
+          test "$mapped" = "$(printf '%s\n' BROWSER_INGEST_ORIGINS DATABASE_URL)" || {
+            echo "::error::infra's 4x-errors contract maps different secrets than this job carries: $(tr '\n' ' ' <<<"$mapped")" >&2
+            exit 1
+          }
+          server="$(curl -fsSL https://raw.githubusercontent.com/aiaiaiai-org/infra/master/contracts/servers/edge-prod-2.yaml)"
+          recipient="$(sed -n 's/^  encryptionRecipient: //p' <<<"$server")"
+          [[ "$recipient" =~ ^ssh-ed25519\ [A-Za-z0-9+/]{68}$ ]] || { echo "::error::edge-prod-2 publishes no valid encryptionRecipient." >&2; exit 1; }
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age
+          mkdir -p "$RUNNER_TEMP/envelope"
+          printf 'DATABASE_URL=%s\nBROWSER_INGEST_ORIGINS=%s\n' "$DATABASE_URL" "$origins" |
+            age --recipient "$recipient" --output "$RUNNER_TEMP/envelope/secrets.age"
+          test -s "$RUNNER_TEMP/envelope/secrets.age"
+          printf 'FROM scratch\nCOPY secrets.age /secrets.age\n' > "$RUNNER_TEMP/envelope/Dockerfile"
+          echo "ENVELOPE_CONTEXT=$RUNNER_TEMP/envelope" >> "$GITHUB_ENV"
+
+      - name: Publish the secret envelope
+        id: envelope
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.ENVELOPE_CONTEXT }}
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ${{ env.IMAGE }}:${{ github.sha }}.secrets
+
+      - name: Attest the secret envelope
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.envelope.outputs.digest }}
+          push-to-registry: true
