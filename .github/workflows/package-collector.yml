@@ -71,14 +71,15 @@ jobs:
           push-to-registry: true
 
   # The collector's secret envelope for infra's automatic delivery of
-  # 4x-errors. It runs only once the owner set the repository variable
-  # INFRA_DELIVERY=enabled after filling the Production environment, so master
-  # never depends on production values before then. This repository holds no
-  # infra credential; infra holds none of these values.
+  # 4x-errors, for every master head: infra delivers a head only with both
+  # its image and its envelope. It reads the Production environment, so a head
+  # built while DATABASE_URL or BROWSER_INGEST_ORIGINS is missing fails here
+  # and is not delivered. This repository holds no infra credential; infra
+  # holds none of these values.
   envelope:
     name: Publish the production secret envelope
     needs: package
-    if: github.ref == 'refs/heads/master' && vars.INFRA_DELIVERY == 'enabled'
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: Production
