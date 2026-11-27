@@ -48,10 +48,10 @@ For the direct-SSH workflow, the edge proxy routes the public collector hostname
 
 ### Delivery through infra
 
-The default placement is aiaiaiai-org/infra's automatic delivery (its `docs/automatic-delivery.md`), and it needs none of the `SSH_*` settings above: infra owns the host, the route and the deployment key, and this repository only publishes.
+The default placement is aiaiaiai-org/infra's automatic delivery (its `docs/automatic-delivery.md`), and it needs none of the `SSH_*` settings above: infra owns the host, the route and the deployment key, and this repository only publishes. The collector is a separate HTTP workload on `edge-dev-1`; its canonical public base URL is `https://api.aiaiaiai.org/4x-errors`. The `errors.aiaiaiai.org` hostname is reserved for the dashboard.
 
-- `Package collector` pushes `ghcr.io/aiaiaiai-org/4x-errors:<full commit SHA>` for every `master` head and attests its provenance. Infra deploys only the branch head, so a head without an image is not delivered.
-- Its `envelope` job seals `DATABASE_URL` and the normalized `BROWSER_INGEST_ORIGINS` with `age` to the public key of the infra server that runs the collector, and publishes them as `<SHA>.secrets`. It runs for every `master` head and reads the Production environment, which must hold `DATABASE_URL` (secret) and `BROWSER_INGEST_ORIGINS` (variable); a head built without them fails there and is not delivered. It refuses to publish if infra's `4x-errors` contract maps different names.
+- `Package collector` pushes `ghcr.io/aiaiaiai-org/4x-errors:<full commit SHA>` for every `master` head and attests its provenance. Infra delivers only the branch head, so a head without an image is not delivered. The collector workload is explicitly manual: reconcile only after owner approval.
+- Its `envelope` job seals `DATABASE_URL` and the normalized `BROWSER_INGEST_ORIGINS` with `age` to the active `edge-dev-1` server's public encryption recipient, and publishes them as `<SHA>.secrets`. It runs for every `master` head and reads the Production environment, which must hold `DATABASE_URL` (secret) and `BROWSER_INGEST_ORIGINS` (variable); a head built without them fails there and is not delivered. It refuses to publish if infra's `4x-errors` contract maps different names.
 - The collector's database is the Supabase project whose connection string is `DATABASE_URL`. Apply schema changes with `Migrate production database` before a release that needs them: delivery never migrates.
 
 `Deploy collector` remains the direct-SSH path for a host that infra does not manage. Do not use both for one host.

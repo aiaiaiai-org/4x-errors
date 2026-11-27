@@ -102,7 +102,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Seal the collector configuration to the edge-prod-2 recipient
+      - name: Seal the collector configuration to the edge-dev-1 recipient
         run: |
           set -Eeuo pipefail
           umask 077
@@ -126,9 +126,14 @@ jobs:
             echo "::error::infra's 4x-errors contract maps different secrets than this job carries: $(tr '\n' ' ' <<<"$mapped")" >&2
             exit 1
           }
-          server="$(curl -fsSL https://raw.githubusercontent.com/aiaiaiai-org/infra/master/contracts/servers/edge-prod-2.yaml)"
+          server="$(curl -fsSL https://raw.githubusercontent.com/aiaiaiai-org/infra/master/contracts/servers/edge-dev-1.yaml)"
+          # Reject a stale or unplaced server contract before encrypting anything.
+          if grep -Eq '^  state: (retired|provisioning)([[:space:]]|$)' <<<"$server" || ! grep -Fxq '    - 4x-errors' <<<"$server"; then
+            echo "::error::4x-errors is not placed on the active edge-dev-1 server." >&2
+            exit 1
+          fi
           recipient="$(sed -n 's/^  encryptionRecipient: //p' <<<"$server")"
-          [[ "$recipient" =~ ^ssh-ed25519\ [A-Za-z0-9+/]{68}$ ]] || { echo "::error::edge-prod-2 publishes no valid encryptionRecipient." >&2; exit 1; }
+          [[ "$recipient" =~ ^ssh-ed25519\ [A-Za-z0-9+/]{68}$ ]] || { echo "::error::edge-dev-1 publishes no valid encryptionRecipient." >&2; exit 1; }
           sudo apt-get update -qq
           sudo apt-get install -y -qq age
           mkdir -p "$RUNNER_TEMP/envelope"
