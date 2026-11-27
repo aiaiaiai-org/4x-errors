@@ -3,4 +3,4 @@
 # Canonical source of the shared agent rules and scripts (see AGENTS.md).
 # Update ref together with the synced files.
 source: aiaiaiai-org/infra
-ref: b91368ba5c99db5f492fd53703dacec329319783
+ref: 88c4ac6f9a0c8270ea14ca411dcefa730776c990
